@@ -21,28 +21,77 @@ A fighter or support staff member in the player's household. Has Attributes, Tra
 A 0–5★ universal quality/power scale applied to Characters, Traits, Perks, and Equipment. See [overview.md](architecture/overview.md) for the full table. For Characters, determines Trait slot capacity.
 
 ### Attribute
-A numeric stat defining a character's capabilities. Each Attribute has a Current value (used in play) and a Potential value (maximum trainable cap).
+A numeric stat (0–200 scale) defining a character's capabilities. There are 9 primary Attributes: Might, Speed, Accuracy, Endurance, Charisma, Awareness, Intellect, Willpower, Luck. Each Attribute has a Current value (used in play) and a Potential value (maximum trainable cap).
 
 ### Current (Attribute)
-The actual stat value used in combat and checks. Starts below Potential; increased by spending XP. Average ~50 for a starting character.
+The actual stat value used in combat and checks. Range 0–200. Starts below Potential; increased by spending XP (cost per +1 = current value). Average ~50 for a starting character.
 
 ### Potential (Attribute)
-The maximum trainable value for an Attribute. Cannot be exceeded by training. Average ~100 for a starting character. Lower Current often correlates with higher Potential (growth opportunity vs. ready-made veteran).
+The maximum trainable value for an Attribute. Range 0–200. Cannot be exceeded by training. Average ~100 for a starting character. Loose inverse correlation with Current — lower Current often correlates with higher Potential (growth opportunity vs. ready-made veteran). Unicorn characters (high both) can appear rarely. Mostly fixed at generation, but can change: Promotion (+10% all Potentials), rare events (small increases), injuries/death (permanent reduction).
 
-### Strength
-Primary Attribute. Physical power, melee damage, carry capacity, heavy equipment requirements.
+### Might
+Primary Attribute. Melee damage, equipment requirements (heavy), forced movement, physical intimidation.
 
-### Agility
-Primary Attribute. Speed, dodge, accuracy, light/finesse weapon scaling.
+### Speed
+Primary Attribute. Initiative gain (primary), dodge/evasion, movement-related perks, Action Speed modifier.
 
-### Willpower
-Primary Attribute. Mental resistance, spell power, resource pools, status resistance (Stun, Psychic, etc.).
+### Accuracy
+Primary Attribute. Attack rolls (hit chance), ranged damage scaling, targeting quality.
+
+### Endurance
+Primary Attribute. Health pool (primary), Stamina pool (co-primary), physical damage soak, attrition resistance.
+
+### Charisma
+Primary Attribute. Morale influence, vendor pricing, crowd management, crowd appeal, leadership aura effects.
 
 ### Awareness
-Primary Attribute. Detection (stealth counterplay), trap awareness, initiative tie-breaking, targeting intelligence.
+Primary Attribute. Detection (anti-stealth), trap awareness, Initiative gain (minor), tie-breaking, critical hit chance.
+
+### Intellect
+Primary Attribute. Spell power, crafting quality, XP efficiency, Mana pool size.
+
+### Willpower
+Primary Attribute. Status resistance, mental damage soak, Focus pool, Stamina pool (co-primary), concentration/anti-interrupt.
+
+### Luck
+Primary Attribute. Contributes to critical hit chance (with Awareness, Accuracy), increases all resistance rolls, provides bonuses on loot table rolls, and affects crowd favor decisions.
+
+### Multi-Attribute Blending
+Design principle where derived stats are computed from weighted combinations of multiple primary attributes, preventing dump stats and making diverse builds viable.
+
+### Archetype (Generation)
+A Group-specific internal character generation template that sets base attribute distributions (bumps, dumps, likely trait pool, equipment themes). Each Group that offers recruitment defines its own themed archetypes — there is no universal archetype list. Not visible to players — they see resulting stats, not the template label.
+
+### Promotion (Character)
+An extremely expensive metacurrency-only process to increase a character's Star Rating by 1. Grants +10% to all Potentials and +1 Trait slot per category. Rewards deep investment in a specific character.
+
+### Career Milestone
+A tracked threshold of fights/tournaments participated in. Enables optional retirement for metacurrency bonuses.
+
+### Crowd Appeal
+A derived stat. 60% Charisma + 25% Luck + 15% Awareness. Determines how much crowd excitement/momentum a character generates during fights.
+
+### Bonus Modifier
+A tracked attribute bonus from Perks, Equipment, or Status Effects. Separate from base Current — removing the source removes only its bonus. Stacks additively within each source type; all source types combine additively.
+
+### Exhaustion (0 Stamina)
+When Stamina reaches 0, physical actions cost Health instead. A last-stand mechanic that creates dramatic late-fight moments without completely disabling the character.
+
+### Magic Defense
+A derived stat. Resistance to magical attacks. 60% Willpower + 25% Awareness + 15% Luck.
 
 ### Anatomical Slot
 A body location where equipment can be worn (Head, Torso, Hands, etc.). Slot availability varies by ancestry/biology. Distinct from Equipment Slot (the 5-item limit).
+
+---
+
+## Groups
+
+### Group
+A named organization in the city — guild, temple, tavern, faction, mercenary company, arena office, monastery, etc. The unified entity type behind vendors, recruiters, trainers, and factions. Each Group offers a service menu with public services (available to anyone) and member services (unlocked by holding the corresponding Bond Trait). See [groups.md](domains/groups.md).
+
+### Service (Group)
+A specific offering provided by a Group. Service types include: vendor (buy/sell), training (attributes/traits/perks), recruitment (hire characters via Group-specific archetypes), spellcasting, crafting, and quests (future). A single Group can offer multiple service types.
 
 ---
 
@@ -58,7 +107,7 @@ Trait category representing innate character identity — ancestry, personality,
 Trait category representing functional capabilities, both combat and support. Examples: Warrior, Pyromancer, Blacksmith, Medic. Characters can fight AND provide household support if their Role Trait Perks allow it.
 
 ### Bond Trait
-Trait category representing organizational affiliations. Unlocks vendor access, themed content, and pricing benefits. Examples: Pyromancer's Guild Member, Priest of Tharzul, Nanna-Sin Monastery Disciple.
+Trait category representing Group membership. A Bond Trait connects a character to a specific Group, unlocking that Group's member services (exclusive inventory, better prices, specialized training, recruitment, etc.). Examples: Pyromancer's Guild Member, Priest of Tharzul, Nanna-Sin Monastery Disciple.
 
 ### Trait Slot
 A slot on a Character for holding one Trait. Characters have slots in each of three categories (Core, Role, Bond); count equals their Star Rating (1–5 per category). Each slot holds one Trait of any star level.
@@ -163,7 +212,7 @@ A consumable type. Fast use like potions, offensive effects (damage, status appl
 A consumable type. Slow use (high Initiative penalty), spell failure chance (requires check), much cheaper than potions for equivalent effect, no power ceiling. Created by characters with the Scribe Perk.
 
 ### Vendor Service
-A pre-combat purchase (not carried into battle). Cheaper than scrolls, no Perk requirements. One-time service effects like temporary buffs or pre-fight healing.
+A pre-combat purchase from a Group's service menu (not carried into battle). Cheaper than scrolls, no Perk requirements. One-time service effects like temporary buffs or pre-fight healing.
 
 ---
 
