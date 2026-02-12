@@ -6,9 +6,9 @@ This document defines conventions for any Claude instance (or human) working on 
 
 ## Project Overview
 
-{{PROJECT_DESCRIPTION}}
+A procedurally generated gladiatorial house management game — a roguelike idle/auto-battler where players recruit fighters, optimize builds through Trait/Perk systems, manage equipment and economy, and watch automated tactical combat unfold. Python + Claude Code, MUD-style architecture (headless server + TUI client).
 
-**Core principle**: {{CORE_PRINCIPLE}}
+**Core principle**: Deep build optimization with economic pressure, played in short sessions. Complexity lives in roster and build management, not moment-to-moment reflexes.
 
 **Current phase**: Specification and design.
 
@@ -159,6 +159,10 @@ Phase (major milestone)
 - **Language**: TBD
 - **Framework**: TBD
 - **Database**: TBD
+
+### Testing
+- Always run tests through the uv virtual environment: `uv run pytest`
+- Never use a bare `pytest` or `python -m pytest` — always prefix with `uv run`
 
 ### Code Style
 - Type hints where applicable
