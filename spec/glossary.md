@@ -128,13 +128,13 @@ Trait category representing innate character identity — ancestry, personality,
 Trait category representing functional capabilities, both combat and support. Examples: Warrior, Pyromancer, Blacksmith, Medic. Characters can fight AND provide household support if their Role Trait Perks allow it.
 
 ### Bond Trait
-Trait category representing Group membership. A Bond Trait connects a character to a specific Group, unlocking that Group's member services (exclusive inventory, better prices, specialized training, recruitment, etc.). Examples: Pyromancer's Guild Member, Priest of Tharzul, Nanna-Sin Monastery Disciple.
+Trait category representing Group membership. A Bond Trait connects a character to a specific Group, unlocking that Group's member services (exclusive inventory, better prices, specialized training, recruitment, etc.). One Bond Trait per Group per character — the Bond levels (1–5★) to deepen the relationship. Examples: Pyromancer's Guild Member, Priest of Tharzul, Nanna-Sin Monastery Disciple.
 
 ### Trait Slot
 A slot on a Character for holding one Trait. Characters have slots in each of three categories (Core, Role, Bond); count equals their Star Rating (1–5 per category). Each slot holds one Trait of any star level.
 
 ### Perk
-The atomic unit of character capability, unlocked by owning a parent Trait. A multi-component package that can include any combination of: Actions, Stat Adjustments, and Triggers. Has a minimum star level; levels to 5★. A Perk's level cannot exceed its parent Trait's level (exception: Perks acquired via Perk Discovery override this cap).
+The atomic unit of character capability, unlocked by owning a parent Trait. A multi-component package that can include any combination of: Actions, Stat Adjustments, and Triggers (no hard component count limit). Has a minimum star level; levels to 5★ using the same scaling curve as Trait amplification (×1.0/×1.2/×1.4/×1.7/×2.0), stacking multiplicatively with Trait level. A Perk's level cannot exceed its parent Trait's level (exception: Perks acquired via Perk Discovery override this cap at acquisition; further leveling remains capped). When the same Perk is owned from two Traits, the higher Trait's amplification applies.
 
 ### Action (Perk Component)
 An active combat ability granted by a Perk. Used on the character's turn during combat. Has an Action Speed, optional cooldown, and optional resource cost.
@@ -152,22 +152,22 @@ An expensive vendor service (from a Group) to remove an entire Trait from a char
 The designated Perk auto-granted (free, no XP cost) when a Trait is acquired. Every Trait has exactly one Starter Perk — it defines the Trait's basic capability and ensures immediate usefulness.
 
 ### Perk Discovery
-A rare chance (~0.1%) when using a Perk's Action or when a Perk's Trigger fires in combat to instantly discover and unlock a random unowned Perk from the same Trait's tree. The discovery roll is rarity-weighted (lower-minimum-star Perks more likely). The discovered Perk is acquired at its minimum star level, free of XP cost, and overrides the Perk level cap. Passive Stat Adjustments do not trigger discovery.
+A rare chance (~0.1%) when using a Perk's Action or when a Perk's Trigger fires in combat to instantly discover and unlock a random unowned Perk from the same Trait's tree. The discovery roll is rarity-weighted (lower-minimum-star Perks more likely). The discovered Perk is acquired at its minimum star level, free of XP cost, and overrides the Perk level cap at acquisition (further manual leveling remains capped by Trait level). Passive Stat Adjustments do not trigger discovery. If all Perks in the tree are already owned, the roll is silently wasted.
 
-### Resource Family
-A category of non-universal resource pool unlocked by owning Traits in that family. Five families exist: Arcane (Mana), Divine (Faith), Primal (Spirit), Psychic (Focus), Martial (Stamina). Each family has a named resource and an attribute-derived pool formula. Each Trait belongs to at most one family; multiple Traits in the same family share one pool.
+### Resource Pool
+A non-universal resource granted to characters through Perk content. A resource pool activates when a character first owns a Perk that references it (costs it or grants pool capacity). The attribute-derived formula provides the base pool size; Perk Stat Adjustments add bonus capacity on top. Five default resource types ship (Mana, Faith, Spirit, Focus, Stamina); content authors can define additional types. Resource pool ownership is emergent from Perk content, not a Trait-level property — a single Trait can have Perks referencing multiple resource types. See [traits-and-perks.md](domains/traits-and-perks.md).
 
 ### Mana
-Arcane family resource pool. Formula: 60% Intellect + 25% Willpower + 15% Awareness (× scaling multiplier). Granted by owning any Arcane-family Trait.
+Default resource pool (Arcane auto-tag). Formula: 60% Intellect + 25% Willpower + 15% Awareness (× scaling multiplier). Activates when a character owns any Perk that costs or grants Mana.
 
 ### Faith
-Divine family resource pool. Formula: 60% Willpower + 25% Charisma + 15% Luck (× scaling multiplier). Granted by owning any Divine-family Trait.
+Default resource pool (Divine auto-tag). Formula: 60% Willpower + 25% Charisma + 15% Luck (× scaling multiplier). Activates when a character owns any Perk that costs or grants Faith.
 
 ### Spirit
-Primal family resource pool. Formula: 50% Endurance + 30% Awareness + 20% Willpower (× scaling multiplier). Granted by owning any Primal-family Trait.
+Default resource pool (Primal auto-tag). Formula: 50% Endurance + 30% Awareness + 20% Willpower (× scaling multiplier). Activates when a character owns any Perk that costs or grants Spirit.
 
 ### Focus
-Psychic family resource pool. Formula: 60% Awareness + 30% Willpower + 10% Endurance (× scaling multiplier). Granted by owning any Psychic-family Trait.
+Default resource pool (Psychic auto-tag). Formula: 60% Awareness + 30% Willpower + 10% Endurance (× scaling multiplier). Activates when a character owns any Perk that costs or grants Focus.
 
 ### Openness (Archetype)
 A generation parameter on an archetype's Trait loot table. A stacking percentage chance per star level to zero out a Trait slot before rolling on the generation table. Low openness produces veteran archetypes (most slots pre-filled); high openness produces open-potential archetypes (many empty slots for the player to fill).
@@ -238,7 +238,7 @@ Equipment's maximum quality ceiling. Current quality drops during combat use; re
 A modifier on equipment (Diablo-style prefix/suffix). Provides attribute bonuses, damage type bonuses, special effects, or Perk enhancements. Budget scales inversely with tier: fewer affixes = stronger each.
 
 ### Tag
-A shared mechanical keyword used by Perks, equipment, and consumables to create emergent synergies. Tags live on individual Perks and their component Actions; Traits derive their tags from the union of all their Perks' tags (no independent Trait tags). Tags can stack on a single item. Examples: Fire, Healing, Reach, Two-Handed, Light, Heavy, Finesse, Ranged.
+A shared mechanical keyword used by Perks, equipment, and consumables to create emergent synergies. Tags live on individual Perks and their component Actions; Traits derive their tags from the union of all their Perks' tags (no independent Trait tags). Perks that grant or cost a resource type automatically gain the corresponding auto-tag (e.g., Mana → Arcane). Tags can stack on a single item. Examples: Fire, Healing, Reach, Two-Handed, Light, Heavy, Finesse, Ranged, Arcane, Divine.
 
 ---
 
@@ -327,4 +327,4 @@ A future system for facility upgrades (barracks, training grounds, infirmary, fo
 
 ---
 
-_Last updated: 2026-02-14 — Updated Perk (level cap), Perk Discovery (triggers, rarity weighting, cap override), Respec (Trait-level only)_
+_Last updated: 2026-02-14 — Round 3: Resource Family → Resource Pool (emergent from Perks, open/extensible), Perk (scaling curve, shared amplification, soft component limit), Perk Discovery (cap override is acquisition-only, full tree wasted), Bond Trait (one per Group), Tag (auto-tags from resources)_

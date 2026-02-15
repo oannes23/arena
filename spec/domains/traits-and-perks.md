@@ -30,7 +30,7 @@ Traits and Perks are the growth and identity system. Traits are the core buildin
 - **Leveling**: All Traits can be leveled up to 5★ regardless of minimum.
 - **XP Cost Schedule**: 0→1★ = 100, 1→2★ = 300, 2→3★ = 600, 3→4★ = 1000, 4→5★ = 1500 XP. Same schedule for Traits and Perks.
 - **Leveling Cost**: XP + trainer service fee (gold paid to the Group providing the training).
-- **Trait Level Amplification**: A multiplier per level applied to all child Perks (slightly accelerating curve, e.g., ×1.0 / ×1.2 / ×1.4 / ×1.7 / ×2.0). Exact values are tuning — deferred to [combat](combat.md) spec.
+- **Trait Level Amplification**: A multiplier per level applied to all child Perks (slightly accelerating curve: ×1.0 / ×1.2 / ×1.4 / ×1.7 / ×2.0). Exact values are tuning — deferred to [combat](combat.md) spec.
 - **Trait Level Effects**: Modifies ALL Perks within that Trait (higher Trait level = stronger Perks).
 - **Requirements**: Can require specific Attributes, other Traits/Perks, derived stats, or achievements.
 - **Requirement Checking**: Acquisition-only gates. Once a Trait is owned, it is never deactivated by subsequent stat changes — requirements are only checked at the moment of acquisition.
@@ -46,6 +46,8 @@ Perks are multi-component packages. Any single Perk can include any combination 
 2. **Stat Adjustments**: Permanent attribute bonuses applied while the Perk is owned.
 3. **Triggers**: Conditional automatic effects that fire when specific combat events occur.
 
+No hard system limit on component count per Perk. Content guidelines suggest 1–3 total components; balance is the content author's responsibility.
+
 **Example — Flame Aura Perk:**
 - Action: Activate "Flame Aura" (grants 10 stacks, costs 50 Mana, 5-turn cooldown)
 - Stat Adjustment: +15 Willpower (permanent while owned)
@@ -56,13 +58,14 @@ Perks are multi-component packages. Any single Perk can include any combination 
 - **Requirements**: Can require Attributes, Traits, other Perks, derived stats, achievements. Requirements are acquisition-only gates (consistent with Trait requirements) — once a Perk is owned, it is never deactivated by stat changes.
 - **Minimum Star Level**: 1–5★ minimum purchase level.
 - **Leveling**: All Perks can level to 5★.
-- **Perk Level Cap**: A Perk's level cannot exceed its parent Trait's level. The Trait must be leveled first to unlock higher Perk levels. **Exception**: Perks acquired via Perk Discovery override this cap — they are usable immediately at their minimum star level even if it exceeds the parent Trait level.
+- **Perk Level Cap**: A Perk's level cannot exceed its parent Trait's level. The Trait must be leveled first to unlock higher Perk levels. **Exception**: Perks acquired via Perk Discovery override this cap at acquisition — they are usable immediately at their minimum star level even if it exceeds the parent Trait level. However, further manual leveling of a discovered Perk is still capped by the parent Trait level.
 - **XP Cost Schedule**: Same as Traits — 0→1★ = 100, 1→2★ = 300, 2→3★ = 600, 3→4★ = 1000, 4→5★ = 1500 XP.
-- **Perk Level Effects**: Modifies only that specific Perk (independent of Trait level, but stacks multiplicatively with it).
-- **Perk Scaling**: Output values scale with Perk level (damage, healing, Stat Adjustment bonuses, Trigger effect magnitudes). Resource costs, cooldowns, and requirements stay flat at all levels.
+- **Perk Level Effects**: Modifies only that specific Perk. Uses the same scaling curve as Trait level amplification (×1.0 / ×1.2 / ×1.4 / ×1.7 / ×2.0). Stacks multiplicatively with Trait level amplification — a 5★ Trait (×2.0) with a 5★ Perk (×2.0) produces a 4.0× total multiplier on base values.
+- **Perk Scaling**: Output values (damage, healing, Stat Adjustment bonuses, Trigger effect magnitudes) scale with Perk level via the multiplier curve. Resource costs, cooldowns, and requirements stay flat at all levels.
 - **Acquisition**: Purchase from Trainers using XP (must own the parent Trait first).
 - **Starter Perk**: Every Trait has exactly one designated Starter Perk that is auto-granted when the Trait is acquired. No XP cost for this initial Perk.
 - **Perk Stacking**: When the same Perk is available from multiple Traits, it does not stack. The second source provides redundant access only — insurance if the first source Trait is respecced away.
+- **Shared Perk Amplification**: When the same Perk is owned from two parent Traits at different levels, the higher parent Trait's amplification multiplier applies. The player always benefits from their highest-leveled source.
 - **Perk Count per Trait**: 3–5 Perks per Trait (defined per individual Trait), including the Starter Perk. No Perk slot limit per Trait — characters can eventually own all 3–5 Perks in a Trait's tree.
 - **No Individual Perk Removal**: Individual Perks cannot be removed. The only way to lose a Perk is to respec the entire parent Trait.
 
@@ -87,27 +90,35 @@ Bond Traits provide vendor access as progression with **hybrid scaling**:
 
 ---
 
-## Resource Families
+## Resource Pools
 
-Each Resource Family defines a non-universal resource pool unlocked by owning Traits in that family. There are 5 families:
+Resource pools are non-universal resources granted to characters through Perk content. The system is open and extensible — new resource types can be defined by content authors.
 
-| Family | Resource | Pool Formula | Typical Trait Types |
-|--------|----------|-------------|---------------------|
-| **Arcane** | Mana | 60% Intellect + 25% Willpower + 15% Awareness | Elemental magic, arcane spellcasting |
-| **Divine** | Faith | 60% Willpower + 25% Charisma + 15% Luck | Healing, holy/unholy, blessings/curses |
-| **Primal** | Spirit | 50% Endurance + 30% Awareness + 20% Willpower | Nature magic, shapeshifting, totems |
-| **Psychic** | Focus | 60% Awareness + 30% Willpower + 10% Endurance | Telekinesis, mind control, illusions |
-| **Martial** | Stamina | Uses Stamina pool (50% Willpower + 50% Endurance, defined in [characters](characters.md)) | Advanced combat techniques, weapon mastery |
+### Default Resource Types
+
+Five resource types ship as the default set. Each has a canonical attribute-derived pool formula and an auto-tag:
+
+| Resource | Pool Formula | Typical Perk Types | Auto-Tag |
+|----------|-------------|-------------------|----------|
+| **Mana** | 60% Intellect + 25% Willpower + 15% Awareness | Elemental magic, arcane spellcasting | Arcane |
+| **Faith** | 60% Willpower + 25% Charisma + 15% Luck | Healing, holy/unholy, blessings/curses | Divine |
+| **Spirit** | 50% Endurance + 30% Awareness + 20% Willpower | Nature magic, shapeshifting, totems | Primal |
+| **Focus** | 60% Awareness + 30% Willpower + 10% Endurance | Telekinesis, mind control, illusions | Psychic |
+| **Stamina** | 50% Willpower + 50% Endurance (defined in [characters](characters.md)) | Advanced combat techniques, weapon mastery | Martial |
+
+Content authors can define additional resource types with custom pool formulas and auto-tags beyond this default set.
 
 ### Pool Mechanics
 
-- **Hybrid sizing**: Base pool from the attribute-derived formula above + bonus from Trait levels in that family.
-- **Ownership**: Each Trait belongs to at most one Resource Family. Owning any Trait in a family grants that family's resource pool.
-- **Shared pool**: Multiple Traits in the same family share one pool — the pool grows via Trait-level bonuses, not by creating separate pools per Trait.
+- **Activation**: A resource pool becomes available when a character first owns a Perk that references that resource (costs it or grants pool capacity). The attribute-derived formula provides the base pool size.
+- **Bonus capacity**: Perk Stat Adjustment components can grant bonus pool capacity (e.g., "+50 Mana pool") on top of the attribute-derived base.
+- **Emergent ownership**: Resource pool ownership is emergent from Perk content, not a Trait-level property. A single Trait can have Perks that reference multiple resource types.
+- **Auto-tagging**: A Perk that grants or costs a resource type automatically gains the corresponding tag (e.g., a Perk that costs Mana gains the Arcane tag). Traits inherit these tags through the standard union-of-Perk-tags rule.
+- **Shared pool**: All Perks that reference the same resource type share one pool per character. The pool grows via Perk-granted bonus capacity, not by creating separate pools per Perk.
+- **Multi-resource Actions**: A single Action can cost resources from multiple pools (e.g., 30 Mana + 20 Stamina for a hybrid "Spellblade Strike").
 - **Combat start**: Pools start at full capacity at the beginning of combat and regenerate slowly per tick. Exact regen rate deferred to [combat](combat.md) spec.
-- **Pool growth**: Emergent from Perk content (Stat Adjustment components that add to the pool), not a system-level bonus for stacking Traits.
-- **Pool removal**: A resource pool disappears immediately when the last Trait in that Resource Family is removed via respec.
-- **Martial exception**: Martial family uses the universal Stamina pool (already defined on all characters). Martial Traits may add bonus capacity to Stamina rather than granting a new pool.
+- **Pool removal**: A resource pool disappears when the character no longer owns any Perks that reference it (e.g., after respeccing the relevant Traits).
+- **Martial exception**: Martial-tagged Perks use the universal Stamina pool (already defined on all characters). Martial Perks may add bonus capacity to Stamina rather than granting a new pool.
 - **Scaling multipliers**: Like other derived stats, pool formulas use per-stat scaling multipliers. Exact multipliers are tuning values deferred to [combat](combat.md) spec.
 
 ---
@@ -140,6 +151,7 @@ Tags are a shared keyword vocabulary connecting Perks, Equipment, and Consumable
 
 - Tags live on individual **Perks** and their component **Actions**.
 - **Traits derive their tags** from the union of all their Perks' tags — Traits have no independent tags.
+- **Auto-tags from resources**: Perks that grant or cost a resource type automatically gain the corresponding resource tag (e.g., Mana → Arcane, Faith → Divine). This is in addition to any manually-assigned tags.
 - Equipment and Consumables also carry tags (defined in their respective specs).
 
 ### How Tags Create Synergies
@@ -189,11 +201,18 @@ A rare mechanic that rewards continued use of existing Perks.
 - When a qualifying Perk component fires in combat, there is a ~0.1% chance to **discover** a random unowned Perk from the same Trait's tree.
 - **Rarity weighting**: The discovery roll is weighted by rarity — lower-minimum-star Perks are more likely to be discovered than higher-minimum-star ones.
 - The discovered Perk is acquired at its minimum star level, free of XP cost.
-- **Level cap override**: Discovered Perks override the Perk level cap — they are acquired active at their minimum star level even if it exceeds the parent Trait level.
+- **Level cap override**: Discovered Perks override the Perk level cap at the moment of acquisition — they are acquired active at their minimum star level even if it exceeds the parent Trait level. However, further manual leveling of the discovered Perk is still capped by the parent Trait level (the Trait must be leveled first to continue raising it).
 - Even rare 5★ Perks can be discovered this way — though they are much less likely due to rarity weighting.
 - Discovery is per-qualifying-component-use, so characters who use many Actions and have many Triggers have more chances.
+- **Full tree**: If all Perks in the Trait's tree are already owned, the discovery roll is silently wasted.
 
 **Trait discovery** (acquiring entirely new Traits via combat, rather than just new Perks from existing Traits) is deferred to a later phase.
+
+---
+
+## Trigger Resolution
+
+When multiple Triggers from different Perks all fire on the same combat event (e.g., "when struck in melee"), all qualifying Triggers fire simultaneously. Effects are collected and applied together with no ordering dependency. Resolution is deterministic from the set of active Triggers, not from acquisition or slot order.
 
 ---
 
@@ -208,6 +227,9 @@ A rare mechanic that rewards continued use of existing Perks.
 
 - Traits can only be acquired into **empty slots**. No overflow, no queue, no replacement shortcut.
 - If all slots in a category are full, the player must respec an existing Trait to make room before acquiring a new one.
+- **No star gate**: A character's Star Rating does not restrict which Traits they can acquire. A 1★ character can acquire a 5★-minimum Trait if they have an empty slot, meet the Trait's requirements, and can afford the XP. Star Rating only determines slot count.
+- **Empty categories allowed**: Characters can respec down to zero Traits in any category. A character with no Role Traits is valid — they simply lack Role-granted capabilities.
+- **One Bond per Group**: A character can hold only one Bond Trait per Group. The Bond Trait levels (1–5★) to represent deepening affiliation. Acquiring a deeper relationship with a Group means leveling the existing Bond Trait, not acquiring a second one.
 
 ---
 
@@ -221,14 +243,14 @@ A rare mechanic that rewards continued use of existing Perks.
 
 ### Perk as Multi-Component Package
 
-- **Decision**: A single Perk can contain any mix of Actions, Stat Adjustments, and Triggers rather than being one component type.
-- **Rationale**: Enables rich, thematic abilities (Flame Aura has an active component, a passive bonus, AND a reactive trigger). Reduces Perk count while increasing Perk depth.
+- **Decision**: A single Perk can contain any mix of Actions, Stat Adjustments, and Triggers rather than being one component type. No hard system limit on component count — content guidelines suggest 1–3 total components per Perk.
+- **Rationale**: Enables rich, thematic abilities (Flame Aura has an active component, a passive bonus, AND a reactive trigger). Reduces Perk count while increasing Perk depth. Soft guidelines keep content manageable without constraining design space.
 - **Implications**: Perk balance must consider the combined value of all components. UI must display multi-component Perks clearly.
 
 ### Trait Level Amplifies All Child Perks
 
-- **Decision**: Leveling a Trait (1–5★) amplifies ALL Perks within that Trait via a per-level multiplier (slightly accelerating: ×1.0 / ×1.2 / ×1.4 / ×1.7 / ×2.0). Leveling a specific Perk (1–5★) amplifies only that Perk. Both stack multiplicatively.
-- **Rationale**: Creates a "wide vs. deep" investment choice — level the Trait for broad improvement, or level specific Perks for focused power. Accelerating curve rewards full commitment.
+- **Decision**: Leveling a Trait (1–5★) amplifies ALL Perks within that Trait via a per-level multiplier (slightly accelerating: ×1.0 / ×1.2 / ×1.4 / ×1.7 / ×2.0). Leveling a specific Perk (1–5★) amplifies only that Perk using the same curve. Both stack multiplicatively — max total at 5★/5★ = 4.0× base values.
+- **Rationale**: Creates a "wide vs. deep" investment choice — level the Trait for broad improvement, or level specific Perks for focused power. Accelerating curve rewards full commitment. Shared curve keeps the system simple.
 - **Implications**: Balance must account for double-stacking (high Trait level × high Perk level). Exact multiplier values are tuning — deferred to combat spec.
 
 ### Fixed Escalating XP Schedule
@@ -239,8 +261,8 @@ A rare mechanic that rewards continued use of existing Perks.
 
 ### Cross-Category Perk Sharing — No Stack
 
-- **Decision**: Identical Perks can appear in different Traits across categories. When a character has the same Perk from two sources, it does not stack — the second source provides redundant access only.
-- **Rationale**: Redundant access is insurance: if you respec away one Trait, you keep the Perk from the other. No stacking prevents degenerate double-dipping builds.
+- **Decision**: Identical Perks can appear in different Traits across categories. When a character has the same Perk from two sources, it does not stack — the second source provides redundant access only. The higher parent Trait's amplification multiplier applies.
+- **Rationale**: Redundant access is insurance: if you respec away one Trait, you keep the Perk from the other. No stacking prevents degenerate double-dipping builds. Using the higher amplification is simple and always benefits the player.
 - **Implications**: Players may intentionally overlap Perks across Traits for safety, but there is no power incentive to do so.
 
 ### Starter Perk Auto-Grant
@@ -255,11 +277,12 @@ A rare mechanic that rewards continued use of existing Perks.
 - **Rationale**: Encourages roster turnover — it's often better to hire a new character than endlessly respec an existing one. Creates attachment to characters and investment in hiring decisions.
 - **Implications**: Players need enough income to hire replacements. The meta shifts toward roster breadth over single-character perfection.
 
-### Five Resource Families
+### Open Extensible Resource Pool System
 
-- **Decision**: Five Resource Families (Arcane/Mana, Divine/Faith, Primal/Spirit, Psychic/Focus, Martial/Stamina) with attribute-derived pool formulas. Each Trait belongs to at most one family. Multiple Traits in the same family share one pool.
-- **Rationale**: Five families cover the major fantasy archetype spaces. Shared pools within a family reward specialization (deeper investment = larger pool) without creating overwhelming resource tracking. Martial reuses Stamina to avoid a redundant pool.
-- **Implications**: Combat spec must implement resource pool formulas and scaling. Characters can have at most 5 non-universal resource pools (one per family). Most characters will have 1–2.
+- **Decision**: Resource pools are emergent from Perk content, not a Trait-level property. Five default resource types ship (Mana, Faith, Spirit, Focus, Stamina) with attribute-derived pool formulas. Content authors can define additional resource types with custom formulas and auto-tags. A resource pool activates when a character first owns a Perk that references it; the attribute formula provides the base, Perk Stat Adjustments add bonus capacity.
+- **Rationale**: Emergent ownership is simpler than explicit Trait-to-family assignments and naturally handles multi-family Traits. Open extensibility means new resource types don't require system changes. Attribute-derived base provides meaningful variation between characters; Perk bonuses reward investment.
+- **Implications**: Combat spec must implement resource pool formulas, activation, and scaling. Content authoring tool must support defining new resource types. No hard cap on how many resource pools a character can have — bounded by Perk content. AI must handle multi-resource Action costs.
+- **Alternatives considered**: Fixed 5 families with Trait-level assignment (rejected — too rigid, prevented multi-family Traits), per-Perk-only pools with no attribute base (rejected — removed character stat relevance from pools).
 
 ### Species as Core Traits
 
@@ -269,15 +292,15 @@ A rare mechanic that rewards continued use of existing Perks.
 
 ### Tag-Driven Synergies
 
-- **Decision**: All cross-Trait synergies are emergent via shared tags. No explicit set bonuses between specific Traits. Tags live on Perks/Actions; Traits derive tags from the union of their Perks.
-- **Rationale**: Tag-driven synergies are open-ended and scale with content — new Traits automatically interact with existing ones through shared tags. Explicit set bonuses would require manual curation and create a combinatorial explosion as content grows.
+- **Decision**: All cross-Trait synergies are emergent via shared tags. No explicit set bonuses between specific Traits. Tags live on Perks/Actions; Traits derive tags from the union of their Perks. Resource-referencing Perks auto-gain the corresponding resource tag (e.g., Mana → Arcane).
+- **Rationale**: Tag-driven synergies are open-ended and scale with content — new Traits automatically interact with existing ones through shared tags. Explicit set bonuses would require manual curation and create a combinatorial explosion as content grows. Auto-tagging from resources ensures consistent categorization without manual effort.
 - **Implications**: Tag vocabulary must be well-curated to enable meaningful but not overpowered synergies. Equipment and consumable specs share the same tag vocabulary.
 
 ### Perk Level Cap by Trait Level
 
-- **Decision**: A Perk's level cannot exceed its parent Trait's level. Exception: Perks acquired via Perk Discovery override this cap.
-- **Rationale**: Creates a natural investment order — Trait first (broad power), then Perks (specific power). Prevents characters from having max-level Perks in a low-level Trait. Discovery exception rewards the rarity of the event.
-- **Implications**: UI must communicate the cap clearly. Leveling a Trait unlocks higher Perk level ceilings for all its Perks.
+- **Decision**: A Perk's level cannot exceed its parent Trait's level. Exception: Perks acquired via Perk Discovery override this cap at acquisition, but further manual leveling remains capped.
+- **Rationale**: Creates a natural investment order — Trait first (broad power), then Perks (specific power). Prevents characters from having max-level Perks in a low-level Trait. Discovery exception rewards the rarity of the event at the moment of discovery, while maintaining the normal progression path afterward.
+- **Implications**: UI must communicate the cap clearly. Leveling a Trait unlocks higher Perk level ceilings for all its Perks, including previously-discovered Perks.
 
 ### Acquisition-Only Requirement Gates
 
@@ -300,9 +323,39 @@ A rare mechanic that rewards continued use of existing Perks.
 
 ### Perk Discovery via Combat
 
-- **Decision**: ~0.1% chance per qualifying Perk component use (Actions and Triggers only — not passive Stat Adjustments) to discover a random unowned Perk from the same Trait's tree. Acquired at minimum star level, free of XP cost. Discovery roll is rarity-weighted (lower-minimum-star Perks more likely). Discovered Perks override the Perk level cap.
+- **Decision**: ~0.1% chance per qualifying Perk component use (Actions and Triggers only — not passive Stat Adjustments) to discover a random unowned Perk from the same Trait's tree. Acquired at minimum star level, free of XP cost. Discovery roll is rarity-weighted (lower-minimum-star Perks more likely). Discovered Perks override the Perk level cap at acquisition only; further leveling remains capped. Full tree = silently wasted roll.
 - **Rationale**: Rewards continued engagement with existing Perks. Creates exciting surprise moments. The low rate prevents it from undermining the trainer economy. Rarity weighting makes discovery of powerful Perks appropriately rare.
 - **Implications**: Combat spec must trigger Perk discovery checks on Action use and Trigger fire events. Economy impact is minimal at 0.1% but should be monitored.
+
+### No Star Gate for Trait Acquisition
+
+- **Decision**: A character's Star Rating does not restrict which Traits they can acquire. A 1★ character can acquire a 5★-minimum Trait if they have an empty slot, meet the Trait's requirements, and can afford the XP. Star Rating determines slot count only.
+- **Rationale**: The XP cost is already a natural gate — a min-5★ Trait costs 3500 XP cumulative, which is prohibitively expensive for a low-star character early on. Adding a star gate would be redundant and reduce build flexibility for players who want to invest heavily in a single Trait on a low-star character.
+- **Implications**: Economy is the primary gate for high-star Traits on low-star characters. The cumulative XP cost (100/300/600/1000/1500) naturally prevents abuse.
+
+### Simultaneous Trigger Resolution
+
+- **Decision**: When multiple Triggers fire on the same combat event, all qualifying Triggers fire simultaneously. Effects are collected and applied together with no ordering dependency.
+- **Rationale**: Simplest model. Eliminates order-dependent interactions, which would be confusing for players and difficult to balance. No incentive to acquire Perks in a specific order.
+- **Implications**: Combat spec implements collected-and-applied-together resolution. No Trigger can depend on the result of another Trigger firing on the same event.
+
+### Multi-Resource Action Costs
+
+- **Decision**: A single Action can cost resources from multiple pools (e.g., 30 Mana + 20 Stamina for a hybrid "Spellblade Strike"). Any combination of resource types is allowed.
+- **Rationale**: Enables hybrid-fantasy abilities and creates interesting resource management tension. Characters who invest in multiple resource families can access powerful cross-discipline Actions.
+- **Implications**: Combat AI must evaluate multi-resource costs when choosing Actions. Content authors must balance multi-resource Actions carefully — they should be powerful enough to justify the broader resource investment.
+
+### One Bond Trait per Group
+
+- **Decision**: A character can hold only one Bond Trait per Group. The Bond Trait levels (1–5★) to represent deepening affiliation. No separate "Apprentice" vs. "Master" Bond Traits for the same Group.
+- **Rationale**: Simplifies the Bond–Group relationship to a clean 1:1 mapping per character. Bond Trait leveling already provides progression depth through hybrid scaling (smooth benefits + discrete tier unlocks). Multiple Bond Traits per Group would dilute the leveling system.
+- **Implications**: Groups spec: each Group defines exactly one Bond Trait. Bond Trait level is the single axis of Group relationship depth.
+
+### Empty Category Respec
+
+- **Decision**: Characters can respec down to zero Traits in any category. A character with no Role Traits, for example, is valid — they simply lack Role-granted capabilities.
+- **Rationale**: Maximum flexibility. The guaranteed-first-roll rule at generation ensures characters start with at least one Trait per category, but post-generation respec should not be artificially constrained. An empty category is a meaningful (if unusual) player choice.
+- **Implications**: UI should clearly communicate when a category is empty. Characters with empty Role slots may have limited combat utility but are not system-invalid.
 
 ---
 
@@ -320,15 +373,15 @@ All structural and mechanical questions are resolved. Two non-blocking items are
 | Spec | Implication |
 |------|-------------|
 | [characters](characters.md) | Trait Slot count defined by Character Star Rating. Core Traits may modify anatomical slots. Species = Core Traits pattern (no hardcoded species list). |
-| [combat](combat.md) | Perks provide Actions (combat abilities), Stat Adjustments (combat stats), and Triggers (combat reactions). Resource Family pool formulas must be implemented (Mana, Faith, Spirit, Focus pools). Resource pools start at full capacity + slow per-tick regen (formula owned by combat). Per-stat scaling multipliers for resource pools. Trait level amplification multipliers (tuning values). Perk Discovery trigger specifics: rolls on Action use and Trigger fire events (not passive Stat Adjustments), rarity-weighted. |
-| [equipment](equipment.md) | Equipment can require specific Traits/Perks. Affix bonuses can enhance specific Perks. Tags create Perk–equipment synergies (shared tag vocabulary). Variable anatomy from ancestry Core Traits affects available slots. |
+| [combat](combat.md) | Perks provide Actions (combat abilities), Stat Adjustments (combat stats), and Triggers (combat reactions). Simultaneous Trigger resolution (all qualifying Triggers fire together, no ordering). Resource pool system: open/extensible, attribute-derived base + Perk bonus capacity, pools activate when first Perk references a resource. Multi-resource Action costs (any combo of pools). Resource pools start at full capacity + slow per-tick regen (formula owned by combat). Per-stat scaling multipliers for resource pools. Trait/Perk level amplification multipliers — shared curve ×1.0/×1.2/×1.4/×1.7/×2.0 (tuning values). Perk Discovery trigger specifics: rolls on Action use and Trigger fire events (not passive Stat Adjustments), rarity-weighted, full tree = wasted roll. |
+| [equipment](equipment.md) | Equipment can require specific Traits/Perks. Affix bonuses can enhance specific Perks. Tags create Perk–equipment synergies (shared tag vocabulary, including auto-tags from resources). Variable anatomy from ancestry Core Traits affects available slots. |
 | [consumables](consumables.md) | Specialist Perks (Bomber, Apothecary) amplify consumable effectiveness. Scribe Perk enables Scroll creation from known Perks. Tags create Perk–consumable synergies. |
-| [combat-ai](combat-ai.md) | Personality Core Traits may modify AI behavior. Action priority lists reference Perk-granted Actions. |
-| [economy](economy.md) | Trainer service fees (gold) for Trait/Perk leveling. Respec gold cost formula. XP cost schedule (100/300/600/1000/1500) interacts with economy balance. Group-specific trainer fee model (specialist vs. generalist pricing differences). |
-| [groups](groups.md) | Trait generation loot table definitions per Group/archetype. Respec is a Group vendor service. Trainer services for Trait/Perk acquisition and leveling. Bond Traits map to specific Groups. Trainer availability model: Group-specific theme alignment, generalist Groups for baseline access. Bond Trait hybrid scaling: smooth benefits (price, breadth) + discrete tier unlocks (exclusive items at 3★, unique services at 5★). |
-| [roster-management](roster-management.md) | Trait composition drives character hiring value. Respec is a vendor service in the economy. Starter Perks affect character readiness at recruitment. |
-| [data-model](../architecture/data-model.md) | Trait/Perk data shape definition needed: Trait → Perk tree, resource family membership, tag lists, loot table weights. |
+| [combat-ai](combat-ai.md) | Personality Core Traits may modify AI behavior. Action priority lists reference Perk-granted Actions. AI must evaluate multi-resource Action costs when choosing Actions. |
+| [economy](economy.md) | Trainer service fees (gold) for Trait/Perk leveling. Respec gold cost formula. XP cost schedule (100/300/600/1000/1500) interacts with economy balance. Group-specific trainer fee model (specialist vs. generalist pricing differences). XP cost as natural gate for high-star Traits on low-star characters. |
+| [groups](groups.md) | Trait generation loot table definitions per Group/archetype. Respec is a Group vendor service. Trainer services for Trait/Perk acquisition and leveling. Bond Traits map to specific Groups — one Bond Trait per Group per character. Trainer availability model: Group-specific theme alignment, generalist Groups for baseline access. Bond Trait hybrid scaling: smooth benefits (price, breadth) + discrete tier unlocks (exclusive items at 3★, unique services at 5★). |
+| [roster-management](roster-management.md) | Trait composition drives character hiring value. Respec is a vendor service in the economy. Starter Perks affect character readiness at recruitment. Empty Trait categories are valid post-respec states. |
+| [data-model](../architecture/data-model.md) | Trait/Perk data shape definition needed: Trait → Perk tree, tag lists, loot table weights. Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation (Actions, Stat Adjustments, Triggers with typed fields). |
 
 ---
 
-_Last updated: 2026-02-14 — Interrogation round 2: requirement checking, perk scaling/caps/prerequisites, pool mechanics, perk discovery triggers, trainer availability, bond trait hybrid scaling, trait slot constraints, cross-trait tags-only interaction_
+_Last updated: 2026-02-14 — Interrogation round 3: shared Perk amplification, multi-resource Actions, discovery cap clarification, no star gate, emergent resource pools (open/extensible), Perk scaling curve, simultaneous Trigger resolution, one Bond per Group, empty categories, soft component guidelines_
