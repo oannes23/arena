@@ -132,7 +132,7 @@ This spec defines universal resources only — pools every character has:
   - PvE encounters: full reset between fights.
 - Stamina regen rate and Defend recovery amount are tuning values deferred to the combat spec.
 
-Trait-unlocked resources (Mana, Focus, Rage, Faith, etc.) are defined in the [traits-and-perks](traits-and-perks.md) spec. Those resources are granted by specific Traits and only exist on characters who possess those Traits.
+Trait-unlocked resources (Mana, Faith, Spirit, Focus) are defined in the [traits-and-perks](traits-and-perks.md) spec via five Resource Families. Those resources are granted by owning Traits in the corresponding family and only exist on characters who possess those Traits.
 
 ### Anatomical Slots
 
@@ -156,6 +156,15 @@ Physical body locations where equipment can be worn. Defined per-character based
 - Non-humanoid anatomy (quadrupeds, serpentine bodies)
 - Extra limbs (four-armed species = 4 hand slots)
 - No head (oozes, constructs)
+
+### Inventory Slots
+
+Every character has fixed inventory capacity, separate from Anatomical Slots:
+
+- **Equipment Slots**: 5 slots. Each equipped item occupies exactly 1 Equipment Slot regardless of how many Anatomical Slots it covers. Detailed mechanics in [equipment](equipment.md).
+- **Consumable Slots**: 5 slots. Filled with consumables before battle. Separate from Equipment Slots. Detailed mechanics in [consumables](consumables.md).
+
+These counts are fixed and do not scale with Star Rating or any other property.
 
 ### Bonus Modifier → Derived Stat Flow
 
@@ -215,6 +224,34 @@ Phase 1 characters are generated with the following identity data:
 | **Origin Blurb** | One-line origin sentence | Generated from recruitment source + archetype. Example: "A former pit fighter from the Arena Recruitment Center" |
 
 Identity depth scales with Star Rating: 1★ characters get minimal descriptions (name + build), while higher-star characters receive richer physical detail and more distinctive origin blurbs. Personality traits (Phase 3–4) and narrative hooks (Phase 4+) are not generated in Phase 1.
+
+### Stat Visibility
+
+All Current and Potential values for all 9 Attributes are fully transparent to the player at all times — during recruitment, on the roster screen, and everywhere else stats appear. There is no hidden stat information. Character evaluation skill comes from understanding build synergies, archetype patterns, and Trait interactions, not from guessing at concealed numbers.
+
+### Character Model Applicability
+
+The Character model (Attributes, derived stats, resources, Anatomical Slots) applies to all combatants. Two tiers of entity exist:
+
+- **Persistent characters** (player-owned and Named NPCs): Full Character entities with the state machine, identity fields, career tracking, and Trait slots. Tracked identically regardless of ownership.
+- **Ephemeral combatants** (unnamed battle enemies, e.g., "5× 1★ Bandits"): Use the same attribute and derived stat model for combat resolution but are not persistent entities — they are created for a specific combat encounter and cease to exist afterward. No state machine, no identity fields, no career tracking.
+
+Named NPC generation (via post-battle recruitment mechanics), the Free Agent pool, and Group membership effects are defined in downstream specs ([groups](groups.md), [roster-management](roster-management.md), [combat](combat.md)).
+
+### Trait Generation at Recruitment
+
+Characters arrive with pre-filled Traits determined by loot table rolls during generation:
+
+- **Rolls per category** = Star Rating. A 3★ character gets 3 Core rolls + 3 Role rolls + 3 Bond rolls (9 total).
+- **Guaranteed minimum**: The first roll in each category is guaranteed — if it would result in "nothing," reroll until a Trait appears. Every character starts with at least 1 Core, 1 Role, and 1 Bond Trait.
+- **"Nothing" result**: After the first guaranteed roll per category, subsequent rolls can yield "nothing" — the slot remains empty for the player to fill later. A high-star character with many empty rolls is a rare open-potential find.
+- **Duplicate Trait roll**: If the same Trait is rolled again, it doesn't add a duplicate. Instead, a random Perk from that Trait's tree is unlocked (that isn't already unlocked). If all Perks are already unlocked, the roll is wasted.
+- **Recruiting Group Bond Trait**: When recruited from a specific Group, that Group's Bond Trait is always guaranteed as one of the Bond rolls. Remaining Bond rolls (if any) draw from the wider loot table.
+- **Loot table source**: The archetype's "likely trait pool" defines the weighted loot table for each category. See [traits-and-perks](traits-and-perks.md) for Trait pool definitions.
+
+### XP Ownership
+
+XP is earned and stored **per-character**. Each character banks their own XP from fights and can only spend it on their own training. Gold is a **household-level** resource shared across all characters.
 
 ---
 
@@ -371,15 +408,45 @@ Identity depth scales with Star Rating: 1★ characters get minimal descriptions
 
 ### Star Rating Decrease
 
-- **Decision**: Star Rating can decrease in extreme events (e.g., botched resurrection, divine curse). Very rare — design note only.
-- **Rationale**: Preserves design space for high-stakes consequences without locking specific triggers in the characters spec. Specific trigger conditions are owned by the specs where those events occur.
-- **Implications**: Downstream specs (combat, groups/temples, quests) may define specific Star Rating decrease triggers. Any decrease also reduces Trait slot capacity (slots per category = Star Rating).
+- **Decision**: Star Rating can decrease in extreme events (e.g., botched resurrection, divine curse). Very rare — design note only. When Star Rating decreases, the player chooses which Trait(s) to remove from each over-capacity category. Removed Traits are lost (must be re-acquired via respec/purchase if desired).
+- **Rationale**: Preserves design space for high-stakes consequences without locking specific triggers in the characters spec. Specific trigger conditions are owned by the specs where those events occur. Player choice over which Traits to drop gives agency in a bad situation rather than random removal.
+- **Implications**: Downstream specs (combat, groups/temples, quests) may define specific Star Rating decrease triggers. Any decrease also reduces Trait slot capacity (slots per category = Star Rating). UI must present a Trait removal selection screen when a Star Rating decrease causes over-capacity.
 
 ### Fallen Sub-State and Post-Combat Outcomes
 
 - **Decision**: Fallen is an In-Combat sub-state triggered when HP drops below 1. Post-combat fate depends on event type: exhibitions have no injury risk for Fallen characters; non-exhibition fights trigger an injury/death roll after combat resolves.
 - **Rationale**: Separates the in-combat event (HP < 1 → out of fight) from the narrative consequence (injury/death). Exhibition safety encourages build testing. Post-combat timing (not mid-fall) simplifies combat resolution and allows resurrection mechanics to intervene.
 - **Implications**: Combat spec must implement Fallen state tracking and decide on mid-combat revival. Tournaments spec must classify events as exhibition or non-exhibition. Injury/death roll mechanics deferred to combat spec.
+
+### Stat Visibility
+
+- **Decision**: Full transparency for all Current and Potential values across all 9 Attributes, at all times (recruitment, roster, etc.). No hidden stat information.
+- **Rationale**: Character evaluation skill comes from understanding build synergies, archetype patterns, and Trait interactions — not from stat discovery. Hiding stats would add tedious guesswork without meaningful strategic depth.
+- **Implications**: UI always displays exact Current and Potential values. Archetype invisibility (players don't see the template label) remains — the generation model is hidden, but the resulting numbers are not.
+
+### Character Model Applicability
+
+- **Decision**: Two tiers of combatant entity. Persistent characters (player-owned and Named NPCs) are full Character entities with state machine, identity, career tracking, and Trait slots. Ephemeral combatants (unnamed battle enemies) use the same attribute/derived stat model but are not persistent — created for a specific combat and discarded afterward.
+- **Rationale**: All combat math should be uniform regardless of combatant origin. Persistence is only needed for entities the game tracks across time. Unnamed enemies don't need state machines or career histories.
+- **Implications**: Combat spec handles ephemeral combatant lifecycle (creation and teardown). Named NPC generation via post-battle recruitment (Charisma/Luck/Awareness check) and the Free Agent pool are defined in downstream specs ([combat](combat.md), [groups](groups.md), [roster-management](roster-management.md)).
+
+### Inventory Slot Counts
+
+- **Decision**: Every character has 5 Equipment Slots and 5 Consumable Slots as fixed chassis properties. These do not scale with Star Rating or any other attribute.
+- **Rationale**: Fixed counts keep inventory management simple and predictable. The strategic depth comes from what you put in the slots, not how many you have. Scaling with stars would make high-star characters even more dominant.
+- **Implications**: Equipment spec defines Equipment Slot mechanics. Consumables spec defines Consumable Slot mechanics. Characters spec defines the counts as part of the chassis.
+
+### Trait Generation Loot Table
+
+- **Decision**: Characters arrive with pre-filled Traits from loot table rolls. Rolls per category = Star Rating. First roll per category is guaranteed (reroll on "nothing"). Subsequent rolls can yield empty. Duplicate Trait rolls unlock a random Perk from that Trait's tree. Recruiting Group's Bond Trait is always guaranteed.
+- **Rationale**: Star-scaled rolls create meaningful differentiation — higher-star characters tend to arrive more "complete" while low-star characters are simpler. The "nothing" result creates variance and occasional open-potential unicorn characters. Duplicate-as-Perk-unlock rewards concentrated archetype identity. Guaranteed Bond Trait from the recruiting Group makes recruitment source matter.
+- **Implications**: Traits-and-perks spec must define loot table weights per archetype. Groups spec must ensure each recruiting Group has a Bond Trait. Economy spec should factor starting Trait count into character hiring cost.
+
+### XP Per-Character, Gold Household
+
+- **Decision**: XP is earned and stored per-character. Gold is a household-level (shared) resource.
+- **Rationale**: Per-character XP rewards fielding the same characters repeatedly and creates investment attachment. Household gold allows strategic resource allocation — the player decides where to spend, creating economic tension across the roster.
+- **Implications**: Economy spec must define XP earn rates per fight. Characters track their own XP balance. Gold income/spending flows through a single household pool.
 
 ---
 
@@ -403,15 +470,15 @@ All character-domain design questions are resolved. The following tuning values 
 
 | Spec | Implication |
 |------|-------------|
-| [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. |
-| [combat](combat.md) | 15 derived stat formulas with locked weight ratios. Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. |
+| [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. Trait generation loot table weights per archetype (weighted pool for Core/Role/Bond rolls at character generation). |
+| [combat](combat.md) | 15 derived stat formulas with locked weight ratios. Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC from defeated enemy archetype). |
 | [equipment](equipment.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
-| [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. |
-| [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. |
-| [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. **New**: Define activity restrictions during Recovering state (training, Group interactions). Define recovery tick durations (passive healing rate). |
+| [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. XP earn rates per fight (per-character XP). Character hiring cost should factor starting Trait count. |
+| [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. Group NPC membership effects (vendor inventories, loot table generation, trainer availability). Free Agent pool (persistent Named NPCs not attached to any Group, recruitable by players). Each recruiting Group must have a Bond Trait (guaranteed at generation). |
+| [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. Define activity restrictions during Recovering state (training, Group interactions). Define recovery tick durations (passive healing rate). Character dismissal/firing mechanics. Free Agent recruitment flow. Post-battle recruitment flow (accepting/declining generated Named NPCs). |
 | [tournaments](tournaments.md) | Configurable Health/Stamina reset per event type (Exhibition: full, Championship: partial, PvE: full). Crowd/momentum section needed (Charisma-driven). Define which event types are "lethal" (can cause Dead state vs. only injuries). Exhibition = no injury risk for Fallen characters (safe build testing). |
 | [combat-ai](combat-ai.md) | Personality traits (Phase 3–4) modify AI behavior. |
 
 ---
 
-_Last updated: 2026-02-14_
+_Last updated: 2026-02-14 — Round 6 final gap sweep (inventory slots, trait generation loot table, XP ownership)_

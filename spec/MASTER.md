@@ -41,7 +41,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | Area | Doc | Status | Notes |
 |------|-----|--------|-------|
 | System Overview | [overview.md](architecture/overview.md) | 🟡 | Philosophy, constraints, non-goals, star rating system |
-| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize |
+| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, resource family membership, tag lists, loot table weights) |
 | MVP Scope | [mvp-scope.md](architecture/mvp-scope.md) | 🟡 | MVP 0 / MVP 1 boundaries, parking lot |
 
 ---
@@ -53,14 +53,14 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | # | Area | Doc | Status | Phase | Key Open Questions |
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
-| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🔄 | 1 | Content volume (min traits/perks), cross-category synergies, stacking rules. **Needs revision**: attributes expanded from 4 to 9, species-as-Core-Traits pattern |
-| 3 | Combat | [combat.md](domains/combat.md) | 🔄 | 1 | 26 open questions — resolution details, stealth, morale, initiative formula. **Needs revision**: attributes expanded 4→9, multi-attribute blending, Luck crit/resistance mechanic. **From characters**: Stamina exhaustion (0→Health drain), Stamina regen + Defend boost, 15 derived stat formulas with locked weight ratios, Magic Defense stat, per-stat scaling multipliers (Health ×10 baseline), Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?), injury/death roll mechanics for non-exhibition Fallen characters |
+| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | None — MVP content examples deferred to implementation, combat-triggered Trait discovery deferred to later phase |
+| 3 | Combat | [combat.md](domains/combat.md) | 🔄 | 1 | 26 open questions — resolution details, stealth, morale, initiative formula. **Needs revision**: attributes expanded 4→9, multi-attribute blending, Luck crit/resistance mechanic. **From characters**: Stamina exhaustion (0→Health drain), Stamina regen + Defend boost, 15 derived stat formulas with locked weight ratios, Magic Defense stat, per-stat scaling multipliers (Health ×10 baseline), Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?), injury/death roll mechanics for non-exhibition Fallen characters, ephemeral combatant lifecycle (creation/teardown), post-battle recruitment check (Charisma/Luck/Awareness → Named NPC generation). **From traits-and-perks**: Resource Family pool formulas (Mana, Faith, Spirit, Focus), resource pool regen (full start + slow per-tick regen, formula owned by combat), Perk Discovery trigger specifics (Actions + Triggers, not passive Stat Adjustments, rarity-weighted roll), Trait level amplification multipliers (tuning values) |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟡 | 2 | Trigger granularity, personality override model, NPC AI |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
-| 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services |
-| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock |
-| 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations |
+| 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services. XP earn rates per fight (per-character). Hiring cost should factor starting Trait count. **From traits-and-perks**: Trainer service fees (gold) for Trait/Perk leveling, respec gold cost formula, XP cost schedule (100/300/600/1000/1500) interactions, Group-specific trainer fee model (specialist vs. generalist pricing differences) |
+| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★) |
+| 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations, character dismissal/firing mechanics, Free Agent recruitment, post-battle recruitment flow |
 | 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state) |
 | 11 | Quests | — | 🔴 | 4+ | Future system. Tasks offered by Groups for rewards. Not yet scoped. |
 
@@ -121,6 +121,61 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-14: Traits & Perks Spec Interrogation (Round 2)
+
+- Resolved all 18 remaining structural/mechanical questions. Status updated from 🟡 to 🟢 Complete.
+- Added acquisition-only requirement gates: Traits, Perks, and prerequisites are never deactivated once owned.
+- Added Perk level cap rule: Perk level ≤ parent Trait level (exception: Perk Discovery overrides cap).
+- Added Perk scaling: output values scale with level, resource costs/cooldowns stay flat.
+- Added Perk prerequisites: flexible graph (not linear chain), cross-Trait prerequisites allowed (rare).
+- Clarified no individual Perk removal — only full Trait respec.
+- Updated Pool Mechanics: pools start full at combat, slow per-tick regen (formula owned by combat), pool growth is emergent from Perk content, pool disappears on last-Trait respec.
+- Updated Perk Discovery: triggers on Actions + Triggers (not passive Stat Adjustments), rarity-weighted roll, discovered Perks override level cap.
+- Added Trainer Availability: Group-specific theme alignment, generalist Groups for baseline access.
+- Added Bond Trait hybrid scaling: smooth scaling (price, breadth) + discrete tier unlocks (3★, 5★).
+- Added Trait Slot Constraints: empty slots only, no overflow/queue/replacement shortcut.
+- Added cross-Trait interaction rule: tags only, no Perk can name/reference another specific Trait or Perk.
+- Updated glossary: Perk (level cap), Perk Discovery (triggers, rarity, cap override), Respec (Trait-level only).
+- Flagged downstream specs:
+  - `combat` — resource pool regen (full start + slow tick), Perk Discovery trigger specifics
+  - `groups` — trainer availability model, Bond Trait hybrid scaling
+  - `economy` — Group-specific trainer fee model (specialist vs. generalist)
+
+### 2026-02-14: Traits & Perks Spec Interrogation (Round 1)
+
+- Resolved all 8 original open questions. Status updated from 🔄 to 🟡 (remaining: MVP content examples, combat Trait discovery deferred).
+- Added 5 Resource Families: Arcane (Mana), Divine (Faith), Primal (Spirit), Psychic (Focus), Martial (Stamina). Locked pool formulas with attribute blend weights.
+- Defined Species/Ancestry Core Traits: stackable ancestry Traits, per-slot max conflict resolution, default humanoid anatomy.
+- Added Tag System: tags on Perks/Actions, Traits derive tags from union of Perks, no explicit set bonuses — all synergies emergent.
+- Added Trait Generation Loot Table structure: nestable weighted subtables, per-star-level roll overrides, openness parameter for veteran vs. open-potential archetypes.
+- Added Perk Discovery: ~0.1% chance per Perk use to discover a random unowned Perk from the same Trait tree.
+- Locked XP cost schedule: 100/300/600/1000/1500 for both Traits and Perks. Leveling costs XP + trainer service fee (gold).
+- Defined Starter Perk: every Trait has exactly one auto-granted Perk. Perk stacking: no stack (redundant access only). Perks per Trait: 3–5.
+- Respec expanded: all XP invested is lost, gold cost deferred to economy spec.
+- Trait level amplification: accelerating multiplier curve (×1.0/×1.2/×1.4/×1.7/×2.0), exact values deferred to combat.
+- Updated glossary: added Resource Family, Mana, Faith, Spirit, Focus, Starter Perk, Perk Discovery, Openness; updated Tag, Respec, Resource.
+- Flagged downstream specs:
+  - `combat` — resource pool formulas, Perk discovery XP trigger, Trait level amplification multipliers
+  - `economy` — trainer service fees, respec gold cost, XP cost schedule interactions
+  - `groups` — loot table definitions per Group/archetype
+  - `data-model` — Trait/Perk data shape definition
+
+### 2026-02-14: Characters Spec Final Gap Sweep (Round 6)
+
+- Added Inventory Slots to character chassis: 5 Equipment Slots + 5 Consumable Slots, fixed (do not scale).
+- Added Trait Generation Loot Table: rolls per category = Star Rating. First roll per category guaranteed (reroll on "nothing"). Duplicate rolls unlock random Perk from that Trait's tree. Recruiting Group's Bond Trait always guaranteed.
+- Clarified XP is per-character (earned and stored individually). Gold is household-level (shared pool).
+- Updated implications for traits-and-perks (loot table weights per archetype), economy (XP earn rates, hiring cost factors starting Traits), groups (each recruiting Group must have a Bond Trait).
+
+### 2026-02-14: Characters Spec Gap Sweep (Round 5)
+
+- Added Stat Visibility decision: full transparency for all Current and Potential values at all times. No hidden stat information — evaluation skill is synergy recognition, not stat discovery.
+- Added Character Model Applicability decision: two-tier entity model. Persistent characters (player-owned and Named NPCs) are full Character entities; ephemeral combatants (unnamed enemies) use the same stat model but aren't persistent.
+- Added trait overflow on Star Rating decrease: player chooses which Trait(s) to remove from over-capacity categories. Removed Traits are lost.
+- Dismissal/firing mechanics deferred to roster-management spec (not part of the character state machine).
+- Added glossary terms: Ephemeral Combatant, Named NPC, Free Agent.
+- Updated implications for combat (ephemeral combatant lifecycle, post-battle recruitment check), groups (NPC membership effects, Free Agent pool), roster-management (dismissal, Free Agent recruitment, post-battle recruitment flow).
 
 ### 2026-02-14: Characters Spec Deep Interrogation (Round 4)
 
@@ -203,4 +258,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-14 — Characters spec round 4 interrogation (scaling multipliers, Fallen sub-state, post-combat outcomes, Star Rating decrease)._
+_2026-02-14 — Traits & Perks spec interrogation round 2 (requirement gates, perk caps/scaling/prerequisites, pool mechanics, discovery triggers, trainer availability, bond hybrid scaling, trait slot constraints, tags-only interaction)._
