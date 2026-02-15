@@ -54,14 +54,14 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
 | 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🔄 | 1 | Content volume (min traits/perks), cross-category synergies, stacking rules. **Needs revision**: attributes expanded from 4 to 9, species-as-Core-Traits pattern |
-| 3 | Combat | [combat.md](domains/combat.md) | 🔄 | 1 | 26 open questions — resolution details, stealth, morale, initiative formula. **Needs revision**: attributes expanded 4→9, multi-attribute blending, Luck crit/resistance mechanic. **From characters**: Stamina exhaustion (0→Health drain), Stamina regen + Defend boost, 15 derived stat formulas with locked weight ratios, Magic Defense stat |
+| 3 | Combat | [combat.md](domains/combat.md) | 🔄 | 1 | 26 open questions — resolution details, stealth, morale, initiative formula. **Needs revision**: attributes expanded 4→9, multi-attribute blending, Luck crit/resistance mechanic. **From characters**: Stamina exhaustion (0→Health drain), Stamina regen + Defend boost, 15 derived stat formulas with locked weight ratios, Magic Defense stat, per-stat scaling multipliers (Health ×10 baseline), Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?), injury/death roll mechanics for non-exhibition Fallen characters |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟡 | 2 | Trigger granularity, personality override model, NPC AI |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
 | 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services |
 | 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock |
-| 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope |
-| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type |
+| 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations |
+| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state) |
 | 11 | Quests | — | 🔴 | 4+ | Future system. Tasks offered by Groups for rewards. Not yet scoped. |
 
 ---
@@ -121,6 +121,26 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-14: Characters Spec Deep Interrogation (Round 4)
+
+- Added derived stat scaling multipliers: weight ratios are canonical blend weights, per-stat scaling multipliers (e.g., Health ×10) convert to game values. Multipliers are tuning values owned by combat spec.
+- Added Fallen in-combat sub-state: HP < 1 → out of fight for remainder. Post-combat fate depends on event type (exhibition = safe recovery, non-exhibition = injury/death roll).
+- Defined post-combat outcome rules by event type: exhibition has no injury risk; non-exhibition triggers injury/death roll after combat resolves.
+- Star Rating can decrease in extreme events (very rare, design note — triggers deferred to downstream specs).
+- Added glossary term: Fallen.
+- Deferred to combat spec: per-stat scaling multipliers, Fallen mid-combat revival, injury/death roll mechanics.
+- Updated implications for combat (scaling multipliers, Fallen mechanics, injury/death rolls) and tournaments (exhibition safety).
+
+### 2026-02-14: Characters Spec Deep Interrogation (Round 3)
+
+- Clarified Bonus Modifier → Derived Stat flow: Effective Attribute = base Current + all Bonus Modifiers, feeds derived stat formulas. Potential only gates training, not effective values. Hard ceiling is scale max (200).
+- Added explicit Character State Machine with 5 states: Available, In-Combat, Recovering, Dead, Retired. Defined all valid state transitions.
+- Recovering characters CAN fight (player's risk with penalties). Dead characters require Raise Dead service. Retired is terminal (hall of fame + metacurrency).
+- Defined Phase 1 identity fields: name (first + optional epithet/surname), physical descriptors, age, gender/presentation, one-line origin blurb.
+- Deferred Training Speed formula to economy spec, recovery tick durations and Recovering activity restrictions to roster-management spec.
+- Added glossary terms: Effective Attribute, Recovering, Retired.
+- Updated implications for roster-management (activity restrictions, recovery ticks), tournaments (lethal event types), economy (Raise Dead pricing, Training Speed).
 
 ### 2026-02-11: Groups Domain Created
 
@@ -183,4 +203,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-11 — Groups domain created; Characters spec complete (🟢)._
+_2026-02-14 — Characters spec round 4 interrogation (scaling multipliers, Fallen sub-state, post-combat outcomes, Star Rating decrease)._

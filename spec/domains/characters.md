@@ -1,7 +1,7 @@
 # Characters — Domain Specification
 
 **Status**: 🟢 Complete
-**Last interrogated**: 2026-02-11
+**Last interrogated**: 2026-02-14
 **Last verified**: —
 **Depends on**: None (primitive)
 **Depended on by**: [traits-and-perks](traits-and-perks.md), [combat](combat.md), [equipment](equipment.md), [economy](economy.md), [groups](groups.md), [roster-management](roster-management.md), [tournaments](tournaments.md)
@@ -114,6 +114,8 @@ Derived stats are computed from primary attributes via multi-attribute blends. W
 | Vendor Modifier | Charisma |
 | Training Speed | Intellect |
 
+**Scaling Multipliers**: Each derived stat's weighted blend is multiplied by a **scaling multiplier** to produce game-scale values. For example, Health Pool = (0.60×Endurance + 0.25×Willpower + 0.15×Might) × 10. A character with 50 Endurance, 40 Willpower, and 100 Might has (30 + 10 + 15) × 10 = 550 HP. Starting multiplier for Health is ×10; all per-stat multipliers are tuning values deferred to the [combat](combat.md) spec.
+
 ### Resources
 
 This spec defines universal resources only — pools every character has:
@@ -154,6 +156,65 @@ Physical body locations where equipment can be worn. Defined per-character based
 - Non-humanoid anatomy (quadrupeds, serpentine bodies)
 - Extra limbs (four-armed species = 4 hand slots)
 - No head (oozes, constructs)
+
+### Bonus Modifier → Derived Stat Flow
+
+Effective Attribute = base Current + all Bonus Modifiers (from Perks, Equipment, Status Effects). This effective value feeds into all derived stat formulas. Potential does **not** cap effective attributes — Potential only gates training (how high base Current can be raised via XP). The hard ceiling is the scale max of 200.
+
+**Example**: A character with 80 base Current Might, +15 from equipment, and +5 from a Perk has an Effective Might of 100. This 100 feeds into Melee Damage (60% Might), Melee Hit (25% Might), Health Pool (15% Might), and Soak Value (10% Might). If their Might Potential is 90, they can only train base Current to 90, but bonuses can push the effective value well beyond Potential.
+
+### Character State Machine
+
+Every character exists in exactly one of five states at any time:
+
+| State | Description | Can Fight? | Can Train? | Can Interact with Groups? |
+|-------|-------------|-----------|-----------|--------------------------|
+| **Available** | Default state. Ready for all activities. | Yes | Yes | Yes |
+| **In-Combat** | Currently in an active fight. Locked until combat resolves. | N/A (already fighting) | No | No |
+| **Recovering** | Has injuries with stat penalties. Recovers passively over ticks (slow) or via healing services (fast/instant). | Yes (at player's risk) | Deferred to roster-management | Deferred to roster-management |
+| **Dead** | HP reached 0 in a lethal context. Requires Raise Dead temple service to return. | No | No | No |
+| **Retired** | Terminal state. Character persists in a "hall of fame" — viewable but permanently inactive. Grants metacurrency rewards. | No | No | No |
+
+**Valid State Transitions:**
+
+```
+Available → In-Combat         (assigned to fight)
+Available → Retired           (player choice)
+
+In-Combat → Available         (didn't Fall, OR Fell in exhibition)
+In-Combat → Recovering        (Fell in non-exhibition, injury roll)
+In-Combat → Dead              (Fell in non-exhibition, death roll)
+
+Recovering → Available        (passive recovery complete or healing service)
+Recovering → In-Combat        (player fields injured character — penalties apply)
+Recovering → Retired          (wounded veteran retires)
+
+Dead → Available              (expensive Raise Dead tier — no permanent penalties)
+Dead → Recovering             (cheaper Raise Dead tier — returns with injuries)
+```
+
+**In-Combat Sub-States:**
+
+- **Fallen**: When a character's HP drops below 1 during combat, they enter the Fallen sub-state and are out of the fight for its remainder. Post-combat fate depends on event type:
+  - **Exhibition**: Fallen characters recover normally → Available (no injury risk).
+  - **Non-exhibition (real fights)**: Fallen characters receive an injury/death roll **after combat resolves** (not at the moment of Fall). Outcomes: no injury → Available, injury sustained → Recovering, death → Dead.
+- Whether mid-combat revival of Fallen characters is possible → deferred to [combat](combat.md) spec.
+
+**Extensibility**: In-Combat may gain additional sub-states in later phases (e.g., Stunned, Fleeing) as combat complexity grows. These would be combat-internal states, not top-level character states.
+
+### Character Identity — Phase 1 Data Fields
+
+Phase 1 characters are generated with the following identity data:
+
+| Field | Format | Notes |
+|-------|--------|-------|
+| **Name** | First name + optional epithet or surname | Procedurally generated. Examples: "Kira," "Borin the Scarred," "Lyra Ashvane" |
+| **Physical Descriptors** | Build, hair, distinguishing features | Cosmetic only. Examples: "stocky build, cropped red hair, jagged scar across left cheek" |
+| **Age** | Numeric | Affects narrative flavor, not mechanics in Phase 1 |
+| **Gender / Presentation** | Open text | Used for pronoun generation and physical description |
+| **Origin Blurb** | One-line origin sentence | Generated from recruitment source + archetype. Example: "A former pit fighter from the Arena Recruitment Center" |
+
+Identity depth scales with Star Rating: 1★ characters get minimal descriptions (name + build), while higher-star characters receive richer physical detail and more distinctive origin blurbs. Personality traits (Phase 3–4) and narrative hooks (Phase 4+) are not generated in Phase 1.
 
 ---
 
@@ -284,6 +345,42 @@ Physical body locations where equipment can be worn. Defined per-character based
 - **Rationale**: Exhaustion creates dramatic late-fight moments without completely disabling characters. Defend as Stamina recovery adds tactical depth to a basic action. Per-event reset creates different strategic demands across event types.
 - **Implications**: Combat spec must implement Health-drain-on-exhaustion, regen rates, and Defend recovery. Tournaments spec must define partial reset percentages for championship events.
 
+### Bonus Modifiers Flow Through Derived Stats
+
+- **Decision**: Effective Attribute = base Current + all Bonus Modifiers. This effective value feeds into all derived stat formulas. Potential does not cap effective attributes — Potential only gates training. The hard ceiling is the scale max (200).
+- **Rationale**: Bonus Modifiers represent temporary or conditional power. Training (Current → Potential) represents permanent growth. Conflating the two would make equipment removal feel punishing and make Potential confusing. Keeping Potential as a training-only gate is clean.
+- **Implications**: Derived stat formulas always use Effective Attribute values. UI should show base Current, bonus breakdown, and effective total. Characters with high bonuses can exceed their Potential in effective stats — this is intentional.
+
+### Explicit Character State Machine
+
+- **Decision**: Characters have five explicit states: Available, In-Combat, Recovering, Dead, Retired. Each state has defined valid transitions (see Character State Machine section above).
+- **Rationale**: Explicit states prevent ambiguous situations (e.g., "can a dead character train?") and give the system clear rules for what actions are valid. Recovering characters CAN fight — this is a deliberate risk/reward choice for the player.
+- **Implications**: All systems that interact with characters must check state. Roster management must enforce state transitions. Combat must set In-Combat on entry and transition to Available/Recovering/Dead on exit. Economy spec must price Raise Dead tiers. Tournaments spec must define which events are "lethal" (can cause Dead state).
+
+### Phase 1 Identity Fields
+
+- **Decision**: Phase 1 characters are generated with: name (first + optional epithet/surname), physical descriptors (build, hair, distinguishing features), age, gender/presentation, and one-line origin blurb.
+- **Rationale**: Provides enough identity for player attachment and differentiation without requiring complex narrative systems. Scales with star rating — low-star characters get minimal detail, high-star characters get richer descriptions.
+- **Implications**: Character generation must produce these fields. UI must display them. Name generation needs a procedural system (or curated lists). Origin blurb generation ties into recruitment source (Group).
+
+### Derived Stat Scaling Multipliers
+
+- **Decision**: The percentage weight ratios in the derived stats table are canonical blend weights. Each derived stat has a per-stat scaling multiplier applied after the weighted blend to produce game-scale values. Example: Health Pool = weighted blend × 10.
+- **Rationale**: Separates the question of "which attributes matter and how much?" (weight ratios, owned by this spec) from "what numbers feel right in gameplay?" (scaling multipliers, a tuning concern). Weight ratios are locked here; multipliers are tuning knobs.
+- **Implications**: Combat spec owns all per-stat scaling multipliers. Health starts at ×10 as a baseline; other multipliers TBD during combat balancing.
+
+### Star Rating Decrease
+
+- **Decision**: Star Rating can decrease in extreme events (e.g., botched resurrection, divine curse). Very rare — design note only.
+- **Rationale**: Preserves design space for high-stakes consequences without locking specific triggers in the characters spec. Specific trigger conditions are owned by the specs where those events occur.
+- **Implications**: Downstream specs (combat, groups/temples, quests) may define specific Star Rating decrease triggers. Any decrease also reduces Trait slot capacity (slots per category = Star Rating).
+
+### Fallen Sub-State and Post-Combat Outcomes
+
+- **Decision**: Fallen is an In-Combat sub-state triggered when HP drops below 1. Post-combat fate depends on event type: exhibitions have no injury risk for Fallen characters; non-exhibition fights trigger an injury/death roll after combat resolves.
+- **Rationale**: Separates the in-combat event (HP < 1 → out of fight) from the narrative consequence (injury/death). Exhibition safety encourages build testing. Post-combat timing (not mid-fall) simplifies combat resolution and allows resurrection mechanics to intervene.
+- **Implications**: Combat spec must implement Fallen state tracking and decide on mid-combat revival. Tournaments spec must classify events as exhibition or non-exhibition. Injury/death roll mechanics deferred to combat spec.
+
 ---
 
 ## Deferred Tuning Items
@@ -293,6 +390,12 @@ All character-domain design questions are resolved. The following tuning values 
 - **Stamina regen rate and Defend recovery amount** → deferred to [combat](combat.md) spec
 - **Championship partial reset percentages** → deferred to [tournaments](tournaments.md) spec
 - **Promotion metacurrency cost** → deferred to [economy](economy.md) spec
+- **Recovery tick duration** → deferred to [roster-management](roster-management.md) or [combat](combat.md) spec
+- **Activity restrictions while Recovering** → deferred to [roster-management](roster-management.md) spec
+- **Training Speed formula** → deferred to [economy](economy.md) spec
+- **Per-stat derived stat scaling multipliers** → deferred to [combat](combat.md) spec
+- **Fallen revival rules (mid-combat)** → deferred to [combat](combat.md) spec
+- **Injury/death roll mechanics and tables** → deferred to [combat](combat.md) spec
 
 ---
 
@@ -301,14 +404,14 @@ All character-domain design questions are resolved. The following tuning values 
 | Spec | Implication |
 |------|-------------|
 | [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. |
-| [combat](combat.md) | 15 derived stat formulas with locked weight ratios. Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. |
+| [combat](combat.md) | 15 derived stat formulas with locked weight ratios. Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. |
 | [equipment](equipment.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
-| [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. |
+| [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. |
 | [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. |
-| [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. |
-| [tournaments](tournaments.md) | Configurable Health/Stamina reset per event type (Exhibition: full, Championship: partial, PvE: full). Crowd/momentum section needed (Charisma-driven). |
+| [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. **New**: Define activity restrictions during Recovering state (training, Group interactions). Define recovery tick durations (passive healing rate). |
+| [tournaments](tournaments.md) | Configurable Health/Stamina reset per event type (Exhibition: full, Championship: partial, PvE: full). Crowd/momentum section needed (Charisma-driven). Define which event types are "lethal" (can cause Dead state vs. only injuries). Exhibition = no injury risk for Fallen characters (safe build testing). |
 | [combat-ai](combat-ai.md) | Personality traits (Phase 3–4) modify AI behavior. |
 
 ---
 
-_Last updated: 2026-02-11_
+_Last updated: 2026-02-14_

@@ -74,8 +74,20 @@ A derived stat. 60% Charisma + 25% Luck + 15% Awareness. Determines how much cro
 ### Bonus Modifier
 A tracked attribute bonus from Perks, Equipment, or Status Effects. Separate from base Current — removing the source removes only its bonus. Stacks additively within each source type; all source types combine additively.
 
+### Effective Attribute
+The value used in all derived stat formulas: base Current + all Bonus Modifiers (from Perks, Equipment, Status Effects). Not capped by Potential — Potential only gates training. Hard ceiling is the scale max (200).
+
 ### Exhaustion (0 Stamina)
 When Stamina reaches 0, physical actions cost Health instead. A last-stand mechanic that creates dramatic late-fight moments without completely disabling the character.
+
+### Fallen
+In-Combat sub-state. A character whose HP dropped below 1 during combat. Out of the fight for its remainder. Post-combat fate depends on event type: exhibitions recover normally (no injury risk), non-exhibition fights trigger an injury/death roll after combat resolves (outcomes: Available, Recovering, or Dead). See [characters.md](domains/characters.md) for the full state machine.
+
+### Recovering
+Character state indicating injuries with stat penalties. The character CAN still fight (at the player's risk, with penalties applied). Recovers passively over ticks (slow) or via healing services (fast/instant). See [characters.md](domains/characters.md) for the full state machine.
+
+### Retired
+Terminal character state. The character persists in a "hall of fame" — viewable but permanently inactive. Grants metacurrency rewards based on career milestones. Cannot be reversed.
 
 ### Magic Defense
 A derived stat. Resistance to magical attacks. 60% Willpower + 25% Awareness + 15% Luck.
@@ -282,4 +294,4 @@ A future system for facility upgrades (barracks, training grounds, infirmary, fo
 
 ---
 
-_Last updated: 2026-02-11_
+_Last updated: 2026-02-14_
