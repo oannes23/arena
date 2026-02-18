@@ -249,7 +249,7 @@ A tiered post-combat roll for Fallen characters in non-exhibition events. Tier 1
 A per-damage/status-type defensive value. Status effects always apply (no binary resist roll). Resistance provides dual reduction: reduces the number of status stacks applied AND reduces damage of that type. Sources: Attributes, Perks, equipment, status effects.
 
 ### Judgment
-A derived combat stat. 40% Awareness + 35% Willpower + 25% Intellect (× scaling multiplier). Controls AI decision quality via two parameters: tactical-vs-personality blend (how much the character weighs objective effectiveness vs personality impulses, range ~0.3 to ~0.95) and selection sharpness (how reliably the character picks the top-scoring Action, range ~1 to ~10). Modified by Star Rating, Perks, equipment affixes, and status effects. High Judgment = near-optimal play; low Judgment = personality-driven, impulsive behavior.
+A derived combat stat. 40% Awareness + 35% Willpower + 25% Intellect (× scaling multiplier). Controls AI decision quality via three parameters: tactical-vs-personality blend (how much the character weighs objective effectiveness vs personality impulses, range ~0.3 to ~0.95), selection sharpness (how reliably the character picks the top-scoring Action, range ~1 to ~10), and lookahead depth (how many ticks ahead the character can project deterministic events, range 1 to 10). Modified by Star Rating, Perks, equipment affixes, and status effects. High Judgment = near-optimal play with strategic foresight; low Judgment = personality-driven, impulsive behavior with minimal prediction.
 
 ### Consideration
 The atomic unit of AI reasoning in the Utility AI system. A function that evaluates game state and returns a score for a specific Action. Two types: Gates (binary pass/fail) and Scorers (continuous preference signal). Defined as part of each Perk Action's data model. See [combat-ai](domains/combat-ai.md).
@@ -276,7 +276,22 @@ A parameter derived from Judgment (range ~1 to ~10) that controls how reliably t
 A function that maps raw game-state values to the 0.01–1.0 output range for Scorers. Common shapes: linear, logistic (S-curve), exponential, step. Each Scorer definition includes curve parameters (thresholds, slopes, inflection points) as part of its data.
 
 ### Personality Archetype
-A content-level tag on Core Traits that represents a character's temperament. Feeds the combat AI's Personality Score track. Five standard archetypes: Aggressive, Cautious, Protective, Vindictive, Showoff. A character can have multiple archetypes from multiple Core Traits. New archetypes can be added by extending the vocabulary.
+A content-level tag on Core Traits that represents a character's temperament. Feeds the combat AI's Personality Score track. Five standard archetypes: Aggressive, Cautious, Protective, Vindictive, Showoff. A character can have multiple archetypes from multiple Core Traits — all contribute equally, and contradictory archetypes create internally conflicted characters. New archetypes can be added by extending the vocabulary.
+
+### Combat Context Flags
+An explicit metadata object passed from the combat system to the AI system at fight start. Contains fight circumstances: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_size`, `opponent_team_size`, etc. Any AI Scorer can query these flags to adjust behavior based on context (e.g., consumable conservation in tournaments, risk tolerance in PvE). Defined by the combat system; consumed read-only by the AI. See [combat-ai](domains/combat-ai.md).
+
+### Consumable Scarcity
+An AI Tactical Scorer (`consumable_scarcity`) that manages limited-use consumable conservation. Penalizes consumable usage unless the situation warrants it, scaling with remaining uses (fewer left = higher bar), impact threshold (must be impactful to score high), and tournament awareness (conserve across rounds when consumables don't replenish). Part of the standard Scorer library. See [combat-ai](domains/combat-ai.md).
+
+### Stealth Awareness (AI)
+An AI Tactical Scorer (`stealth_awareness`) that adjusts scoring when Sneaking enemies are present. Boosts AoE Actions (which hit Sneaking characters), boosts Search for high-value stealth targets, and reduces single-target damage scores when the best available targets are Sneaking and untargetable. Part of the standard Scorer library. See [combat-ai](domains/combat-ai.md).
+
+### Future State Value
+An AI Tactical Scorer (`future_state_value`) that implements Judgment-gated lookahead. Projects deterministic future events (Effects Phase outcomes + Initiative timing) up to the character's lookahead depth (1–10 ticks based on Judgment). Scores Actions based on how favorable the projected future state is. Existing Scorers evaluate current state only; this Scorer adds prediction as an independent signal. See [combat-ai](domains/combat-ai.md).
+
+### Lookahead Depth
+The number of ticks ahead a character's AI can project deterministic game-state events. Controlled by the Judgment stat: range 1 tick (low Judgment) to 10 ticks (high Judgment). Projects Effects Phase outcomes (DoTs, regen, buff/debuff expiry) and Initiative timing (when characters will act). Does NOT include threat estimation (guessing enemy Actions) or probability projection. With fights lasting 25–150 ticks, 10-tick lookahead represents ~7–40% of a fight. See [combat-ai](domains/combat-ai.md).
 
 ### Resource
 A pool spent to use certain Actions. Default resources (all characters): Health, Stamina. Trait-defined resources belong to five default types: Mana (Arcane), Faith (Divine), Spirit (Primal), Focus (Psychic), plus content-author-defined types. See Resource Pool in Traits & Perks section.
@@ -390,4 +405,4 @@ A future system for facility upgrades (barracks, training grounds, infirmary, fo
 
 ---
 
-_Last updated: 2026-02-17 — Combat AI Utility AI system: added Judgment, Consideration, Gate, Scorer, Tactical Score, Personality Score, Utility Score, Selection Sharpness, Response Curve, Personality Archetype. Previous: 2026-02-16 combat interrogation updates._
+_Last updated: 2026-02-17 — Combat AI round 2: added Combat Context Flags, Consumable Scarcity, Stealth Awareness (AI), Future State Value, Lookahead Depth. Updated Judgment (three parameters: blend, sharpness, lookahead depth) and Personality Archetype (clarified equal contribution and contradictory archetypes). Previous: Combat AI Utility AI system terms. 2026-02-16 combat interrogation updates._

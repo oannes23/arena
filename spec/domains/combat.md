@@ -1,7 +1,7 @@
 # Combat — Domain Specification
 
-**Status**: 🟢 Complete
-**Last interrogated**: 2026-02-16
+**Status**: 🟢 Complete (updated 2026-02-17: fight length revised, context flags added, sequential evaluation noted)
+**Last interrogated**: 2026-02-17
 **Last verified**: —
 **Depends on**: [characters](characters.md), [traits-and-perks](traits-and-perks.md)
 **Depended on by**: [combat-ai](combat-ai.md), [tournaments](tournaments.md)
@@ -21,7 +21,7 @@ Combat is the core gameplay loop — automated tactical fights between teams of 
 - **Scale**: 1v1 to 20v20.
 - **Automation**: Pre-configured AI orders; combat executes automatically (idle/auto-battler).
 - **Player interaction**: Configure builds and AI before combat; spectate during.
-- **Target match length**: 15–25 ticks. Fights should be fast and decisive — attrition comes from tournament multi-round structure, not individual fight length.
+- **Target match length**: 25–150 ticks. The range reflects fight variety: short PvE fodder encounters at the low end (~25 ticks), standard tournament matches in the middle (~50–80 ticks), and epic championship finals at the high end (~100–150 ticks). Controlled via the global Initiative multiplier and team composition.
 
 ### Spatial System — Zones and Ranges
 
@@ -48,7 +48,7 @@ Each combat tick resolves in a fixed order:
 
 1. **Effects Phase**: Per-tick status effects resolve (DoT damage, stack decay, regen ticks, environmental hazards)
 2. **Initiative Phase**: All characters add `sqrt(Speed) × global_initiative_multiplier` to their Initiative meters
-3. **Turns Phase**: Characters whose Initiative ≥ 100 take their turns (in order of highest Initiative first, with tie-breaking rules)
+3. **Turns Phase**: Characters whose Initiative ≥ 100 take their turns in Initiative order (highest first, with tie-breaking rules). Characters evaluate and act **sequentially** — board state updates after each character acts, so later characters react to the updated state. See [combat-ai](combat-ai.md) for team coordination details.
 
 This order means DoTs and status decay happen before any character acts, and Initiative accumulates before turns resolve.
 
@@ -254,16 +254,23 @@ Judgment is a derived combat stat that controls how effectively a character's AI
 
 **Formula**: 40% Awareness + 35% Willpower + 25% Intellect
 
-**Function** — controls two AI parameters:
+**Function** — controls three AI parameters:
 - **Tactical-vs-Personality blend**: How much the character weighs objective effectiveness vs personality impulses. Range ~0.3 (low Judgment) to ~0.95 (high Judgment).
 - **Selection sharpness**: How reliably the character picks the top-scoring Action vs making "suboptimal" choices. Range ~1 (low Judgment) to ~10 (high Judgment).
+- **Lookahead depth**: How many ticks ahead the character can project deterministic game-state events (Effects Phase + Initiative timing). Range 1 tick (low Judgment) to 10 ticks (high Judgment). See [combat-ai](combat-ai.md) for the full lookahead system.
 
 **Modifiers** beyond the base formula:
 - Character Star Rating (higher stars = modest baseline boost)
 - Specific Perks and equipment affixes
 - Status effects (confusion, fear could lower it temporarily)
 
-Judgment uses the same per-stat scaling multiplier model as other derived stats. The exact multiplier and the functions mapping Judgment to blend/sharpness values are tuning parameters.
+Judgment uses the same per-stat scaling multiplier model as other derived stats. The exact multiplier and the functions mapping Judgment to blend/sharpness/lookahead values are tuning parameters.
+
+### Combat Context Flags
+
+At the start of each fight, the combat system assembles an explicit **context flags** object and passes it to the AI system. This metadata describes the fight circumstances — tournament round, exhibition status, PvE tier, team sizes, consumable replenishment rules, etc. Any AI Scorer can query these flags to adjust behavior based on context.
+
+Context flags are assembled by the combat system from the event configuration. The AI system consumes them read-only. See [combat-ai](combat-ai.md) for how Scorers use these flags.
 
 ### Resource Pool Scaling Multipliers
 
@@ -445,7 +452,7 @@ New types can be added without schema changes — the list format is inherently 
 
 - **Decision**: Initiative gain per tick = `sqrt(Speed) × global_initiative_multiplier`, acting at threshold ≥ 100. Global multiplier defaults to ~3.0.
 - **Rationale**: Sqrt provides diminishing returns on Speed stacking. Global multiplier is a match-pacing knob independent of character balance — adjusting it speeds up or slows down combat without affecting relative character power.
-- **Implications**: At default multiplier 3.0, a character with Speed 100 gains ~30 Initiative per tick → acts roughly every 3–4 ticks. Match length target of 15–25 ticks means most characters act 4–8 times per fight. Speed investment has clear but limited returns.
+- **Implications**: At default multiplier 3.0, a character with Speed 100 gains ~30 Initiative per tick → acts roughly every 3–4 ticks. Match length target of 25–150 ticks means most characters act 7–50 times per fight depending on fight type. Speed investment has clear but limited returns. The global Initiative multiplier can be varied per event type to control fight length.
 - **Alternatives considered**: Pure `sqrt(Speed)` without multiplier (rejected — too few actions per character per fight), logarithmic scaling (rejected — sqrt provides sufficient diminishing returns).
 
 ### Action Speed as Flat Modifier
@@ -506,7 +513,7 @@ New types can be added without schema changes — the list format is inherently 
 
 - **Decision**: No natural Health regeneration during combat. Stamina has slow passive regen.
 - **Rationale**: Makes healing a build investment. Teams must commit resources (Perk slots, consumable slots, equipment affixes) to sustain.
-- **Implications**: Matches trend toward attrition without healing investment. Match length tuning (15–25 ticks) accounts for no passive healing.
+- **Implications**: Matches trend toward attrition without healing investment. Match length tuning (25–150 ticks) accounts for no passive healing — longer fights especially reward healing investment.
 
 ### No Default Regen for Trait-Granted Resources
 
@@ -550,11 +557,11 @@ New types can be added without schema changes — the list format is inherently 
 - **Rationale**: Binary range is simplest for both implementation and AI reasoning. Zone-based spatial system already provides meaningful range dynamics through movement costs.
 - **Implications**: An archer at Long range deals the same damage as one at Short range (if the Action allows both ranges). Range advantages come from not needing to move, not from damage bonuses.
 
-### Target Match Length: 15–25 Ticks
+### Target Match Length: 25–150 Ticks
 
-- **Decision**: Individual fights should last 15–25 ticks. Adjusted via the global Initiative multiplier.
-- **Rationale**: Fast, decisive fights. Each character acts 4–8 times — enough for meaningful decisions, short enough that individual fights don't drag. Attrition and depth come from multi-round tournament structure, not from long individual fights.
-- **Implications**: All balance (damage, health, resources, status effects, cooldowns) must be tuned for this window. A 5-turn cooldown is "once per fight"; a 10-turn cooldown is "maybe never."
+- **Decision**: Individual fights should last 25–150 ticks. The range reflects fight variety: short PvE fodder encounters (~25 ticks), standard tournament matches (~50–80 ticks), and epic championship finals (~100–150 ticks). Adjusted via the global Initiative multiplier per event type.
+- **Rationale**: The original 15–25 tick target was too narrow for the game's fight variety. Short PvE encounters need to feel fast; championship finals need enough ticks for strategic depth, resource management, and dramatic reversals. The wider range gives each fight type its own pacing identity.
+- **Implications**: Balance must account for the full range. Cooldowns, resource pools, and status durations should be tuned for the middle of the range (~60 ticks) with acceptable behavior at both extremes. A 5-tick cooldown fires ~5–30 times per fight; a 20-tick cooldown fires 1–7 times. Tournament pacing assumptions must account for longer individual fights.
 
 ### MVP Scope: All Types + Default Map
 
@@ -588,7 +595,7 @@ Most original questions are resolved. Remaining items are tuning values and defe
 5. **Revival Health fraction**: What percentage of max HP does a revived character return with?
 6. **Injury roll probability tables**: Exact thresholds for tier 1 (injury yes/no) and tier 2 (severity) rolls.
 7. **Resistance reduction formulas**: Exact formulas for how resistance reduces stacks and damage (per-type tuning curves).
-8. **Judgment scaling multiplier and mapping functions**: Per-stat scaling multiplier for Judgment, and the functions mapping Judgment to tactical-vs-personality blend (0.3–0.95) and selection sharpness (1–10).
+8. **Judgment scaling multiplier and mapping functions**: Per-stat scaling multiplier for Judgment, and the functions mapping Judgment to tactical-vs-personality blend (0.3–0.95), selection sharpness (1–10), and lookahead depth (1–10 ticks).
 
 ### Deferred Systems
 8. **Morale**: Full design deferred to Phase 4.
@@ -601,15 +608,15 @@ Most original questions are resolved. Remaining items are tuning values and defe
 
 | Spec | Implication |
 |------|-------------|
-| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection. AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system. Combat log must record AI scoring data (top 3 Actions per turn with scores). |
+| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection. AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system (blend, sharpness, and lookahead depth). Combat log must record AI scoring data (top 3 Actions per turn with scores). Combat system passes context flags to AI at fight start. Characters within a tick act sequentially in Initiative order with state updates between each. |
 | [characters](characters.md) | 9 Attributes feed all combat calculations via 16 derived stat formulas (including Judgment for AI). Anatomical slots determine weapon/armor options. Stamina exhaustion (0→Health drain), Stamina regen + Defend boost. Fallen sub-state mechanics implemented. Post-combat flow includes Perk Discovery resolution (accept/reject) alongside injury/death, recruitment, loot. |
 | [traits-and-perks](traits-and-perks.md) | Perks provide Actions, Stat Adjustments, Triggers. Traits unlock resource types. Effect resolution order within Actions: status → damage → movement (overrides simultaneous model). All cooldowns reset per-combat. Perk Discovery rolls collected during combat, resolved post-combat. Tag-scoped bonuses: flat or %, additive stacking, flat→% order. Trait/Perk level amplification multipliers shared curve ×1.0/×1.2/×1.4/×1.7/×2.0. |
 | [equipment](equipment.md) | Weapons provide Attack/Damage values and damage type tags. Armor provides Defense/Soak. Affixes can grant Penetration, crit bonuses, status riders, stealth-tagged effects. Equipment affixes use the tag system for synergies. |
 | [consumables](consumables.md) | Consumables are usable during combat turns (potions, bombs, scrolls). Consumables can provide revival (Revive effect component). AI must decide when to use them. |
-| [tournaments](tournaments.md) | Tournament matches are combat instances. Exhibition events skip injury checks. Non-exhibition events trigger tiered injury rolls with overkill severity. Per-combat cooldown and resource pool resets between rounds. Star-gated entry to manage power gaps. Post-combat flow phases apply per round. |
+| [tournaments](tournaments.md) | Tournament matches are combat instances. Exhibition events skip injury checks. Non-exhibition events trigger tiered injury rolls with overkill severity. Per-combat cooldown and resource pool resets between rounds. Star-gated entry to manage power gaps. Post-combat flow phases apply per round. Fight length varies by event type (25–150 ticks) — tournament pacing must account for longer championship fights. |
 | [meta-balance](../architecture/meta-balance.md) | Combat outcomes (win/loss per character, per Trait) feed the automatic underdog balancing system. |
 | [data-model](../architecture/data-model.md) | Must support: hidden system Trait type, effect component typed format (type tag + key-value parameters), target tag vocabulary, Trigger event vocabulary, Soak/Penetration/Crit as stat categories, tiered injury roll data, overkill tracking per Fallen character. |
 
 ---
 
-_Last updated: 2026-02-17 — Added Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) for combat AI decision quality. Updated combat-ai implications for Utility AI system. Previous: 2026-02-16 full interrogation (7 rounds, 27 decisions): match length 15–25 ticks, percentage Soak with diminishing returns + Penetration, critical hits as extra damage roll, type-ordered effect resolution (status before damage), global Initiative multiplier (~3.0), Action Speed as flat modifier, tick order (Effects→Init→Turns), resistance reduces stacks AND damage (no binary resist), AoE hits stealth + damage break chance + stealth-tagged Actions, passive + active detection (Search), no default regen for Trait-granted resources, hidden Combatant system Trait for default Actions, Fallen revival via Perks/consumables, overkill affects injury severity, tiered injury checks, phased post-combat presentation, binary range (no falloff), haste/slow dual channel, formula-based scaling multiplier defaults, canonical vocabularies (target tags, Trigger events, effect component types), MVP all 10 damage types + default map, channeled abilities deferred to Phase 2+_
+_Last updated: 2026-02-17 — Combat AI round 2 integration: revised target match length from 15–25 to 25–150 ticks (PvE fodder to championship finals), added Combat Context Flags (metadata passed to AI at fight start), noted sequential team evaluation in Turns Phase (board state updates between characters), updated Judgment to control three AI parameters (blend, sharpness, lookahead depth). Previous: Added Judgment derived stat for combat AI. 2026-02-16: full interrogation (7 rounds, 27 decisions)._

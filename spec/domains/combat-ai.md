@@ -1,6 +1,6 @@
 # Combat AI — Domain Specification
 
-**Status**: 🟢 Complete
+**Status**: 🟢 Complete (Round 2: 14 additional decisions)
 **Last interrogated**: 2026-02-17
 **Last verified**: —
 **Depends on**: [combat](combat.md), [traits-and-perks](traits-and-perks.md), [characters](characters.md)
@@ -10,7 +10,7 @@
 
 ## Overview
 
-Combat AI governs what characters choose to do on each turn during automated combat. With 20–40+ Actions per character, multi-resource costs, tag-scoped bonuses, and complex board state, the system uses a **Utility AI** model: every available Action is scored against current game state via weighted Considerations, and the best-scoring Action is selected with controlled randomness. AI "intelligence" is a character stat (Judgment), not a system constant — low-Judgment characters make personality-driven, impulsive decisions while high-Judgment characters approach optimal play.
+Combat AI governs what characters choose to do on each turn during automated combat. With 20–40+ Actions per character, multi-resource costs, tag-scoped bonuses, and complex board state, the system uses a **Utility AI** model: every available Action is scored against current game state via weighted Considerations, and the best-scoring Action is selected with controlled randomness. AI "intelligence" is a character stat (Judgment), not a system constant — low-Judgment characters make personality-driven, impulsive decisions while high-Judgment characters approach optimal play. High-Judgment characters also gain **lookahead** — the ability to project future game state and factor predictions into scoring.
 
 AI configuration remains a player-facing build optimization surface. Players influence behavior through weight overrides on the scoring system, not by writing priority lists.
 
@@ -33,10 +33,11 @@ This replaces the priority-list model (try A, then B, then C) which does not sca
 
 Judgment is a derived combat stat that controls AI decision quality. See [combat.md](combat.md) for the canonical formula.
 
-**Function** — controls two parameters:
+**Function** — controls three parameters:
 
 - **Tactical-vs-Personality blend** (`judgment_blend`): How much the character weighs objective effectiveness vs personality impulses. Range ~0.3 (low Judgment) to ~0.95 (high Judgment).
 - **Selection sharpness**: How reliably the character picks the top-scoring Action vs making "suboptimal" choices. Range ~1 (low Judgment, flat distribution) to ~10 (high Judgment, heavily favors top score).
+- **Lookahead depth**: How many ticks ahead the character can project deterministic game-state events. Range 1 tick (low Judgment) to 10 ticks (high Judgment). See [Judgment-Gated Lookahead](#judgment-gated-lookahead).
 
 **Modifiers beyond the base formula:**
 - Character Star Rating (higher stars = modest baseline boost)
@@ -100,10 +101,13 @@ Reusable Consideration types that Perk Actions reference by name. Content author
 | `target_vulnerability` | Tactical | Target's vulnerability to this Action's damage type and tags. Higher when the target has low resistance or relevant debuffs. |
 | `action_speed_efficiency` | Tactical | Effect value normalized by Initiative cost. Fast Actions score higher per unit of time spent. |
 | `self_hp_critical` | Tactical | Defensive bonus that scales as own HP drops. Boosts defensive/healing Actions when the character is in danger. |
-| `position_need` | Tactical | Am I at the wrong range for my strongest abilities? Boosts Move Actions when repositioning would unlock better Actions. |
+| `position_need` | Tactical | Range-gap + zone density. Am I at the wrong range for my strongest abilities? Also evaluates zone density — avoid overcrowded zones, prefer zones with allies for mutual support. Boosts Move Actions when repositioning would unlock better Actions or improve spatial positioning. |
 | `status_value` | Tactical | Value of applying a status effect (debuff on enemy, buff on ally) or removing one (cleanse). Considers existing stacks, resistance, and strategic impact. |
 | `anti_repetition` | Tactical | Small penalty (~0.85×) for repeating last turn's Action. Creates natural rotation and more varied, watchable combat. |
-| `revival_priority` | Tactical | Value of reviving a Fallen ally. Considers the ally's combat value, team HP state, and fight phase. |
+| `revival_priority` | Tactical | Value of reviving a Fallen ally. Uses forward-looking "remaining potential" model: evaluates the fallen ally's available Actions, resource pools, cooldowns, and remaining fight length. High-value allies with full cooldowns and resources in long fights score highest; depleted allies in nearly-won fights score lowest. |
+| `stealth_awareness` | Tactical | Adjusts scoring when stealth enemies are present. Boosts AoE Actions when Sneaking enemies exist in targetable zones. Boosts Search for high-value stealth targets. Reduces single-target damage scores when the best available targets are Sneaking (can't be targeted). |
+| `consumable_scarcity` | Tactical | Scarcity-aware scoring for limited-use consumable Actions. Penalizes usage unless the situation warrants it — scales with remaining uses (fewer left = higher bar), impact threshold (only score high when effect is impactful), and tournament awareness (conserve across rounds when `combat_context.is_tournament` and consumables don't replenish). |
+| `future_state_value` | Tactical | Judgment-gated prediction Scorer. Projects deterministic future events (Effects Phase outcomes + Initiative timing) up to the character's lookahead depth (1–10 ticks based on Judgment). Scores Actions higher when they set up favorable future states and lower when future state is unfavorable regardless of action. Existing Scorers stay simple (current state only); this Scorer adds prediction as an independent signal. See [Judgment-Gated Lookahead](#judgment-gated-lookahead). |
 | `aggression_preference` | Personality | Boosts offensive/damage Actions. Derived from aggressive personality archetypes. |
 | `caution_preference` | Personality | Boosts defensive/positioning Actions. Derived from cautious personality archetypes. |
 | `protective_preference` | Personality | Boosts ally-supporting Actions (heals, buffs, shields). Derived from protective personality archetypes. |
@@ -149,7 +153,9 @@ Product of all Personality Scorers, normalized by geometric mean. Represents how
 | **Vindictive** | Prioritize whoever last hurt self or allies | Vengeful Spirit |
 | **Showoff** | Flashy, high-impact, expensive Actions preferred | Born Performer |
 
-A character can have multiple personality archetypes from multiple Core Traits. When multiple archetypes apply, their corresponding Personality Scorers all contribute to the Personality Score. A character with no personality-tagged Core Traits has a neutral Personality Score (all Personality Scorers return 0.5, producing a neutral geometric mean).
+A character can have multiple personality archetypes from multiple Core Traits. When multiple archetypes apply, **all Personality Scorers contribute equally** — they are multiplied together and normalized by geometric mean like any other Scorer track. A character with [Aggressive, Protective] has both `aggression_preference` and `protective_preference` active simultaneously. Contradictory archetypes create internally conflicted characters — sometimes one Scorer wins, sometimes the other, driven by situational context. This is a feature: an aggressive-but-protective warrior might charge offensively when allies are healthy, but pivot to shielding when allies are hurt.
+
+A character with no personality-tagged Core Traits has a neutral Personality Score (all Personality Scorers return 0.5, producing a neutral geometric mean).
 
 **Actions without Personality Scorers**: If an Action has no Personality Scorers defined, its Personality Score defaults to 0.5 (neutral — neither boosted nor penalized by personality).
 
@@ -360,6 +366,118 @@ No separate "smart NPC AI" or "dumb NPC AI" logic exists. AI quality is entirely
 
 ---
 
+## Consumable AI
+
+Consumable Actions (potions, bombs, scrolls) use the **same Gate/Scorer pipeline** as Perk Actions. Consumables are not special-cased — they go through Gate checks, Tactical/Personality scoring, blending, and selection like any other Action.
+
+The key addition is the `consumable_scarcity` Scorer, which prevents the AI from burning limited-use items carelessly:
+
+**Scarcity Model** — three factors:
+
+1. **Remaining uses**: Fewer remaining uses = higher threshold for usage. A character with 1 potion left needs a more compelling reason to drink it than one with 5 potions.
+2. **Impact threshold**: The consumable must be impactful in the current situation. A healing potion when at 90% HP scores low; the same potion at 20% HP scores high. Impact is evaluated by the consumable's primary effect (healing urgency for health potions, damage output for bombs, etc.).
+3. **Tournament awareness**: When `combat_context.is_tournament` is true and consumables don't replenish between rounds, the Scorer further penalizes usage in early rounds, conserving for later when stakes are higher.
+
+Player-configured **consumable triggers** (Phase 2+) map to Gate overrides on consumable Actions, working alongside `consumable_scarcity` to provide fine-grained control.
+
+---
+
+## Combat Context Flags
+
+At fight start, the combat system passes an explicit **context flags** object to the AI system. Any Scorer can query these flags to adjust behavior based on fight circumstances.
+
+```
+combat_context: {
+  is_tournament: bool,
+  round: int,              // current round (1-indexed)
+  total_rounds: int,       // total rounds in this event
+  consumables_replenish: bool,  // do consumables reset between rounds?
+  is_exhibition: bool,
+  pve_tier: int | null,    // null if not PvE
+  team_size: int,
+  opponent_team_size: int,
+  ...                      // extensible for future flags
+}
+```
+
+**Usage examples**:
+- `consumable_scarcity` checks `is_tournament`, `round`, `total_rounds`, and `consumables_replenish` to decide conservation strategy
+- `resource_efficiency` can adjust early/late phase thresholds based on fight context
+- Future Scorers can use `pve_tier` to adjust risk tolerance (low-tier PvE = more aggressive, high-tier = more conservative)
+
+Context flags are defined by the combat system (see [combat.md](combat.md)), not by the AI spec. The AI spec only defines that Scorers can read them.
+
+---
+
+## Judgment-Gated Lookahead
+
+High-Judgment characters gain the ability to **project future game state** and factor predictions into Action scoring. This is the third parameter controlled by Judgment, alongside blend and sharpness.
+
+### Lookahead Depth
+
+Lookahead depth scales with Judgment:
+
+- **Low Judgment**: 1 tick lookahead (minimal prediction)
+- **High Judgment**: Up to 10 ticks lookahead (substantial prediction)
+
+With fights lasting 25–150 ticks, 10-tick lookahead represents ~7–40% of a fight — substantial but appropriate as a reward for high-Judgment investment.
+
+### Lookahead Scope
+
+The lookahead projects **deterministic events only** — things that will definitely happen regardless of anyone's decisions:
+
+1. **Effects Phase outcomes**: DoT damage, regen ticks, buff/debuff expiry, stack decay. The AI can predict "this enemy will die to their Burning stacks in 3 ticks" or "my shield buff expires next tick."
+2. **Initiative timing**: When characters will reach the Initiative ≥ 100 threshold and take their turns. The AI can predict "I'll act again before that enemy does" or "three enemies act before my healer gets a turn."
+
+The lookahead does **NOT** include:
+- **Threat estimation**: No guessing what enemies will do (their Action choices are unpredictable)
+- **Probability projection**: No modeling of hit/miss/crit variance
+- **Recursive planning**: No "if I do X, they'll do Y, then I'll do Z" chains
+
+### Implementation: `future_state_value` Scorer
+
+Lookahead is implemented as a separate `future_state_value` Scorer in the Tactical track. Existing Scorers remain simple — they evaluate current state only. The `future_state_value` Scorer adds prediction as an **independent signal** that composes with other Scorers through the standard geometric mean.
+
+This Scorer:
+- Simulates the Effects Phase and Initiative accumulation for N ticks ahead (N = lookahead depth)
+- Evaluates the projected board state (ally HP, enemy HP, buff/debuff status, resource levels, who acts next)
+- Returns a score based on how favorable the projected future is for the current Action choice
+
+For characters with 1-tick lookahead, this Scorer provides minimal information (essentially just "will DoTs kill anyone before next turn?"). For characters with 10-tick lookahead, it provides rich strategic context.
+
+---
+
+## Team Coordination
+
+Team AI uses **sequential evaluation with state updates**. Characters within a tick's Turns Phase evaluate and act in **Initiative order** (highest Initiative first), and the board state updates after each character acts. There is no explicit coordination logic — natural coordination emerges from characters reacting to current reality.
+
+**How it works**:
+1. Characters are ordered by Initiative (using the standard tie-breaking rules from [combat.md](combat.md))
+2. The first character evaluates all Actions against current board state, selects and executes one
+3. Board state updates (HP changes, status applied, position changed, etc.)
+4. The next character evaluates against the **updated** board state
+5. Repeat until all characters with Initiative ≥ 100 have acted
+
+**Why sequential, not simultaneous**: Simultaneous evaluation would require characters to "guess" what allies will do, adding complexity without strategic depth. Sequential evaluation means later-acting characters naturally adapt to earlier characters' Actions — a healer sees the warrior already healed and switches to buffing, a damage dealer sees the priority target already dead and picks a new one.
+
+**Emergent coordination patterns**:
+- **Heal triage**: When two healers act in the same tick, the first heals the most wounded ally; the second heals the next most wounded (because the first target is now less wounded)
+- **Focus fire**: When allies have already damaged a target, `target_vulnerability` and `damage_output` naturally favor finishing that target
+- **AoE avoidance**: When allies move into a zone, `aoe_clustering` naturally adjusts to avoid friendly fire in the new configuration
+
+---
+
+## Content Authoring: Performance Guidelines
+
+Soft guidelines for content authors designing Perk Actions with AI Considerations:
+
+- **Prefer standard Scorers**: The standard Consideration library covers most use cases. Use `damage_output`, `resource_efficiency`, `target_vulnerability`, etc. before creating custom Considerations.
+- **Keep custom Considerations simple**: When a standard Scorer doesn't fit, custom Considerations should evaluate a single factor (not replicate the complexity of multiple standard Scorers combined).
+- **Optimize the engine, not the content**: Performance optimization happens in the AI evaluation engine — batching, caching, early termination. Content authors should focus on correct behavior, not computational efficiency.
+- **No hard limits**: There are no enforced limits on Scorer count per Action or custom Consideration complexity. These guidelines are for content quality, not system constraints.
+
+---
+
 ## AI Preview and Debugging
 
 Players cannot preview or simulate AI behavior before a match ("dry run" mode is not supported in any phase). However, the Utility AI system provides **post-combat transparency**:
@@ -382,9 +500,13 @@ The combat log replaces simulation needs — players learn their character's ten
 | AoE friendly fire | `aoe_clustering` Scorer: net value = Σ(enemy value) − Σ(ally penalty × 1.5–2.0× weight). Negative-net zones score ~0.05, naturally deprioritized but not hard-vetoed. |
 | Action repetition | `anti_repetition` Scorer: ~0.85× for Actions used last turn. Creates natural rotation without hard-blocking repeat usage when it's genuinely the best option. |
 | Personality vs survival | Even at lowest Judgment blend (30% tactical), survival-critical Actions score high enough tactically to usually win. Content authors can add `self_hp_critical` to defensive Actions for extra safety. Berserkers dying to aggression is a feature, not a bug. |
-| Stealth/detection trade-offs | `target_exists_gate` respects Sneaking visibility. Search Action's `status_value` Scorer evaluates the value of detecting hidden enemies. AI naturally searches when enemy stealth is impactful. |
-| Revival priority | `revival_priority` Scorer evaluates fallen ally value, team state, fight phase. High-value allies in close fights get revived; low-value allies in won fights don't waste Actions on revival. |
+| Stealth/detection trade-offs | `target_exists_gate` respects Sneaking visibility. `stealth_awareness` Scorer boosts AoE when stealth enemies exist, boosts Search for high-value targets, reduces single-target scores when best targets are stealthed. AI naturally adapts tactics to stealth presence. |
+| Revival priority | `revival_priority` Scorer uses forward-looking "remaining potential" model. Evaluates fallen ally's available Actions, resource pools, cooldowns, and remaining fight length. High-value allies with full resources in long fights get revived; depleted allies in nearly-won fights don't waste Actions on revival. |
 | No personality archetypes | Characters without personality-tagged Core Traits get neutral Personality Scores (0.5). Judgment blend still applies — their behavior is purely tactical, modulated by selection sharpness. |
+| Consumable conservation | `consumable_scarcity` Scorer penalizes consumable usage unless impactful. Scales with remaining uses, impact threshold, and tournament awareness (conserve across rounds). Player-configured triggers (Phase 2+) can override via Gate conditions. |
+| Stealth AoE preference | When multiple enemies are Sneaking, `stealth_awareness` naturally boosts AoE Actions (which hit Sneaking characters) and deprioritizes single-target damage (which can't target them). No special-case logic — scoring handles it. |
+| Personality conflict | Characters with contradictory archetypes (e.g., [Aggressive, Protective]) have all Personality Scorers active simultaneously. Contradictions create internally conflicted characters whose behavior shifts based on situational context — sometimes aggression wins, sometimes protection. This is a feature, not a bug. |
+| Team coordination timing | Characters in the same tick act sequentially in Initiative order, with board state updating between each. No explicit coordination — later characters naturally react to earlier characters' Actions. Emergent coordination (heal triage, focus fire) happens automatically. |
 
 ---
 
@@ -454,11 +576,16 @@ All design questions are resolved. Remaining items are tuning values:
 
 1. **Judgment blend function**: Exact mapping from Judgment stat value to the 0.3–0.95 blend range. Likely logistic curve with tuning parameters.
 2. **Selection sharpness function**: Exact mapping from Judgment stat value to the 1–10 sharpness range. Likely linear or logistic.
-3. **Response curve parameters**: Default curve shapes and parameters for each standard Consideration. These are tuning values refined through playtesting.
-4. **Personality archetype weights**: Default influence strength per archetype. How strongly does "Aggressive" bias toward offensive Actions?
-5. **Anti-repetition penalty**: Exact multiplier (~0.85× is the starting point). May vary by Action type (spamming the same AoE might be worse than repeating a basic Attack).
-6. **AoE ally penalty weight**: Exact multiplier (1.5–2.0× range) for ally presence in AoE zones.
-7. **Fight phase detection**: How does `resource_efficiency` determine "early" vs "late" fight? Tick count thresholds, team HP ratios, or combination?
+3. **Lookahead depth curve**: Exact mapping from Judgment stat value to the 1–10 tick lookahead range. Likely linear or logistic with a floor of 1.
+4. **Response curve parameters**: Default curve shapes and parameters for each standard Consideration. These are tuning values refined through playtesting.
+5. **Personality archetype weights**: Default influence strength per archetype. How strongly does "Aggressive" bias toward offensive Actions?
+6. **Anti-repetition penalty**: Exact multiplier (~0.85× is the starting point). May vary by Action type (spamming the same AoE might be worse than repeating a basic Attack).
+7. **AoE ally penalty weight**: Exact multiplier (1.5–2.0× range) for ally presence in AoE zones.
+8. **Fight phase detection**: How does `resource_efficiency` determine "early" vs "late" fight? Tick count thresholds, team HP ratios, or combination?
+9. **Consumable scarcity thresholds**: Exact scoring curves for the `consumable_scarcity` Scorer — how remaining uses, impact assessment, and tournament round factor into the penalty.
+10. **Stealth awareness parameters**: Scoring weights for `stealth_awareness` — how much does AoE get boosted vs. single-target deprioritized when stealth enemies exist? At what threshold does Search become worthwhile?
+11. **Zone density weights**: How strongly does zone density (ally/enemy count per zone) factor into `position_need` relative to range-gap evaluation?
+12. **Future state value weights**: How much influence does the `future_state_value` Scorer have relative to other Tactical Scorers? Should its weight scale with Judgment (more trusted at high Judgment)?
 
 ---
 
@@ -466,14 +593,14 @@ All design questions are resolved. Remaining items are tuning values:
 
 | Spec | Implication |
 |------|-------------|
-| [combat](combat.md) | Judgment is a new derived stat (Awareness + Willpower + Intellect blend). Combat log must record AI scoring data (top 3 Actions per turn with scores). AI evaluation happens during the Turns Phase of each tick. |
+| [combat](combat.md) | Judgment is a new derived stat (Awareness + Willpower + Intellect blend). Combat log must record AI scoring data (top 3 Actions per turn with scores). AI evaluation happens during the Turns Phase of each tick. Characters within a tick act sequentially in Initiative order with state updates between each. Combat system passes context flags to AI at fight start. **Fight length revised to 25–150 ticks** (range reflects PvE fodder to championship finals). |
 | [traits-and-perks](traits-and-perks.md) | Perk Action data model must include an `ai` block (gates, tactical_scorers, personality_scorers). Core Traits may include personality archetype tags. Default Actions (Combatant system Trait) have embedded Considerations. |
 | [characters](characters.md) | Judgment is a new derived stat feeding the AI system. Awareness, Willpower, and Intellect gain additional importance as contributors to AI quality. |
-| [consumables](consumables.md) | Consumable Actions need AI Considerations. Player-configured consumable triggers map to Gate overrides (e.g., "use healing potion below 30% HP" adds a custom Gate). |
+| [consumables](consumables.md) | Consumable Actions need AI Considerations and use the standard Gate/Scorer pipeline. `consumable_scarcity` Scorer manages limited-use conservation. Player-configured consumable triggers map to Gate overrides (e.g., "use healing potion below 30% HP" adds a custom Gate). Tournament context flags affect consumable conservation strategy. |
 | [tournaments](tournaments.md) | NPC teams use the same AI system — difficulty comes from stat distribution, not AI code. AI configuration quality affects tournament performance (Phase 2+). |
 | [equipment](equipment.md) | Equipment affixes can modify Judgment (boosting or reducing AI quality). Equipment with AI-relevant effects (stealth, AoE, revival) benefits from appropriate Considerations. |
 | [data-model](../architecture/data-model.md) | Must support: Consideration schema (type + curve parameters), per-Action AI block (gates + tactical_scorers + personality_scorers), per-character AI configuration (weight overrides), personality archetype tags on Core Traits. |
 
 ---
 
-_Last updated: 2026-02-17 — Full rewrite: replaced priority-list model with Utility AI system. Defined Consideration architecture (Gates + Scorers), standard library (4 Gates, 16 Scorers), two-track scoring (Tactical + Personality), Judgment-controlled blending and selection sharpness, Perk-embedded AI definitions, player config as weight overrides, NPC AI parity, edge case handling. All 8 original open questions resolved._
+_Last updated: 2026-02-17 — Round 2 interrogation: 14 additional decisions. Added Consumable AI (consumable_scarcity Scorer, standard pipeline, tournament-aware conservation), Combat Context Flags (explicit context passed to AI), Judgment-Gated Lookahead (1–10 ticks prediction depth, future_state_value Scorer, Effects Phase + Initiative timing projection), stealth_awareness Scorer, team coordination (sequential evaluation with state updates), personality archetype mixing (all contribute equally, contradictory = internally conflicted), fight length revised to 25–150 ticks, revival_priority updated to forward-looking remaining potential model, position_need updated with zone density, content authoring performance guidelines. Standard library expanded to 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Previous: Full rewrite replacing priority-list model with Utility AI system._
