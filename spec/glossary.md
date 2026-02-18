@@ -137,13 +137,19 @@ A slot on a Character for holding one Trait. Characters have slots in each of th
 The atomic unit of character capability, unlocked by owning a parent Trait. A multi-component package that can include any combination of: Actions, Stat Adjustments, and Triggers (no hard component count limit). Has a minimum star level; levels to 5★ using the same scaling curve as Trait amplification (×1.0/×1.2/×1.4/×1.7/×2.0), stacking multiplicatively with Trait level. A Perk's level cannot exceed its parent Trait's level (exception: Perks acquired via Perk Discovery override this cap at acquisition; further leveling remains capped). When the same Perk is owned from two Traits, the higher Trait's amplification applies.
 
 ### Action (Perk Component)
-An active combat ability granted by a Perk. Used on the character's turn during combat. Has an Action Speed, optional cooldown, and optional resource cost.
+An active combat ability granted by a Perk. Used on the character's turn during combat. Has an Action Speed, optional cooldown, optional resource cost, and tag-based targeting (e.g., `[Enemy, Single]`, `[Ally, AoE-Zone]`). All cooldowns reset fully between fights (per-combat only — no cross-fight persistence). Outputs are expressed as an effect component list — an ordered list of typed effect components (Damage, Heal, ApplyStatus, etc.) that resolve simultaneously. See [traits-and-perks.md](domains/traits-and-perks.md) for the full model.
 
 ### Stat Adjustment (Perk Component)
-A permanent attribute bonus applied while the Perk is owned. Passive — always active.
+A permanent bonus applied while the Perk is owned. Passive — always active. Two subtypes: **flat bonuses** (direct numeric bonus to any stat — Attributes, derived stats, resource pools, crit chance, etc.) and **tag-scoped bonuses** (conditional bonus when a matching tag is present — can be flat or percentage, e.g., "+5 Soak vs [Poison]" or "+10% damage to [Fire] Actions"). Multiple percentage bonuses on the same stat/tag stack additively. Application order: flat bonuses first, then combined percentage as a single multiplier on the already-level-scaled value.
 
 ### Trigger (Perk Component)
-A conditional automatic effect from a Perk that fires when specific combat events occur. Not activated by the player or AI — resolves automatically.
+A conditional automatic effect from a Perk that fires when specific combat events occur (e.g., OnHit, OnHitBy, OnAllyFallen, OnTurnStart). Not activated by the player or AI — resolves automatically. Uses the same effect component list as Actions for its outputs. The canonical Trigger event vocabulary is owned by the combat spec.
+
+### Effect Component
+A typed unit of effect output used by Actions and Triggers. Each component has a type tag and key-value parameters. Core types (illustrative): Damage, Heal, ApplyStatus, RemoveStatus, Move, Summon, Shield. All effect components within a single Action or Trigger resolve simultaneously. Numeric output values scale with Perk/Trait level multipliers; costs and cooldowns stay flat. The full type catalog is owned by the combat spec.
+
+### Target Tag
+A tag on an Action specifying what it can target. Examples: `[Self]`, `[Enemy, Single]`, `[Ally, AoE-Zone]`. The combat spec defines how target tags resolve to valid battlefield targets. New targeting modes are new tags — no schema changes required.
 
 ### Respec
 An expensive vendor service (from a Group) to remove an entire Trait from a character. All XP invested in the removed Trait and its Perks is lost. Operates at the Trait level only — there is no individual Perk removal. Intentionally costly to encourage roster turnover over endlessly iterating a single character.
@@ -152,10 +158,10 @@ An expensive vendor service (from a Group) to remove an entire Trait from a char
 The designated Perk auto-granted (free, no XP cost) when a Trait is acquired. Every Trait has exactly one Starter Perk — it defines the Trait's basic capability and ensures immediate usefulness.
 
 ### Perk Discovery
-A rare chance (~0.1%) when using a Perk's Action or when a Perk's Trigger fires in combat to instantly discover and unlock a random unowned Perk from the same Trait's tree. The discovery roll is rarity-weighted (lower-minimum-star Perks more likely). The discovered Perk is acquired at its minimum star level, free of XP cost, and overrides the Perk level cap at acquisition (further manual leveling remains capped by Trait level). Passive Stat Adjustments do not trigger discovery. If all Perks in the tree are already owned, the roll is silently wasted.
+A rare chance (~0.1% base rate) when using a Perk's Action or when a Perk's Trigger fires in combat to discover a random unowned Perk from the same Trait's tree. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier` — where Trait Level Multiplier uses the standard amplification curve (×1.0/×1.2/×1.4/×1.7/×2.0). No hard rate cap — small tree size (2-4 discoverable Perks) is the natural limit. Discovery rolls are collected during combat but **resolved post-combat** (alongside injury checks, NPC recruitment, loot). The player can **accept or reject** each discovered Perk; rejected Perks remain in the pool for future rolls. Accepted Perks are acquired at minimum star level, free of XP cost, and override the Perk level cap at acquisition (further leveling capped by Trait level). Rarity-weighted (lower-minimum-star more likely). Passive Stat Adjustments do not trigger discovery. Full tree = silently wasted roll.
 
 ### Resource Pool
-A non-universal resource granted to characters through Perk content. A resource pool activates when a character first owns a Perk that references it (costs it or grants pool capacity). The attribute-derived formula provides the base pool size; Perk Stat Adjustments add bonus capacity on top. Five default resource types ship (Mana, Faith, Spirit, Focus, Stamina); content authors can define additional types. Resource pool ownership is emergent from Perk content, not a Trait-level property — a single Trait can have Perks referencing multiple resource types. See [traits-and-perks.md](domains/traits-and-perks.md).
+A non-universal resource granted to characters through Perk content. A resource pool activates when a character first owns a Perk that references it (costs it or grants pool capacity). The attribute-derived formula provides the base pool size; Perk Stat Adjustments add bonus capacity **pre-multiplier** (bonus capacity adds to the weighted attribute blend before the per-stat scaling multiplier is applied, meaning it is amplified by the multiplier). Five default resource types ship (Mana, Faith, Spirit, Focus, Stamina); content authors can define additional types. Resource pool ownership is emergent from Perk content, not a Trait-level property — a single Trait can have Perks referencing multiple resource types. See [traits-and-perks.md](domains/traits-and-perks.md).
 
 ### Mana
 Default resource pool (Arcane auto-tag). Formula: 60% Intellect + 25% Willpower + 15% Awareness (× scaling multiplier). Activates when a character owns any Perk that costs or grants Mana.
@@ -183,40 +189,97 @@ A spatial region on the battlefield. Default map: 5 zones (North, South, East, W
 Distance classification between zones. **Short**: same zone (melee). **Medium**: adjacent zones. **Long**: non-adjacent zones.
 
 ### Initiative
-A meter that accumulates per tick based on Speed. When Initiative ≥ 100, the character takes a turn. After acting, Initiative is reduced (base −100, modified by Action Speed).
+A meter that accumulates per tick based on Speed. Each tick, characters add `sqrt(Speed) × global_initiative_multiplier` to their meter. When Initiative ≥ 100, the character takes a turn. After acting, Initiative is reduced by `100 - Action Speed modifier`. Haste/Slow effects use two channels: Speed modification (permanent, affects sqrt calculation) and Initiative gain modification (temporary multiplier).
 
 ### Tick (Combat)
-A single time step in combat resolution. Each tick, all characters add `sqrt(Speed)` to their Initiative meters and any per-tick effects (status decay, DoTs) resolve.
+A single time step in combat resolution. Each tick resolves in fixed order: (1) Effects Phase — per-tick status effects resolve (DoTs, decay, regen); (2) Initiative Phase — all characters accumulate Initiative; (3) Turns Phase — characters with Initiative ≥ 100 act. See [combat.md](domains/combat.md) for full tick resolution order.
+
+### Global Initiative Multiplier
+A per-combat tuning value (default ~3.0) applied to Initiative gain each tick. Controls match pacing without affecting relative character balance. Higher = more turns per tick = faster combat.
 
 ### Action Speed
-A property of an Action (Perk component) that modifies how much Initiative is subtracted after use. Fast actions let a character act again sooner; slow actions impose a longer delay.
+A flat modifier to the base −100 Initiative cost after acting. Positive values = faster recovery (Action Speed +30 → only −70 Initiative cost). Negative values = longer delay (Action Speed −40 → −140 Initiative cost). Default Actions (Attack, Defend, Move, Search) have Action Speed 0.
 
 ### Roll-vs-Static Defense
 The combat resolution model. Attacker rolls 1 to [Attack Value]; defender's Defense is subtracted as a flat threshold. Negative result = miss. Non-negative result = hit bonus that carries into the damage step.
 
 ### Soak
-Armor/resistance value used in the damage step. Damage is rolled 1 to [Damage Value]; Soak is subtracted. Negative result = fully absorbed.
+Damage reduction stat used in the damage step. Uses percentage-based diminishing returns: `Reduction % = Soak / (Soak + K)` where K is a global tuning constant. Higher Soak is always valuable but never grants immunity. Penetration reduces effective Soak before the formula: `Effective Soak = Soak - Penetration` (minimum 0).
+
+### Penetration
+A stat (from Perks or equipment affixes) that reduces the defender's effective Soak before the diminishing returns formula is applied. Creates a meaningful counter-stat to Soak stacking.
+
+### Critical Hit
+An extra damage roll triggered after a successful hit. Chance derived from Physical Crit (40% Awareness + 35% Luck + 25% Accuracy) or Magic Crit (40% Awareness + 35% Luck + 25% Intellect). Adds bonus damage to the damage pool, not a multiplier.
 
 ### Rider Effect
-A modular effect (from a Perk or equipment affix) that triggers after a successful hit. Each rider has its own resolution roll. Examples: Stunning Blow, Flaming Sword proc, Armor Penetration.
+A modular effect (from a Perk or equipment affix) that triggers as part of the status/rider application step (Step 3 of the combat pipeline — before the damage step). Each rider has its own resolution. Examples: Stunning Blow, Flaming Sword proc, Armor Shred.
 
 ### Status Effect
 A temporary condition applied to a character, tracked as stacks with a decay model. Unified system for buffs, debuffs, DoTs, and crowd control. Max stacks effectively unlimited (9999 cap).
 
 ### Sneaking
-A status that prevents a character from being targeted by enemies. Enemies must pass a contested Awareness check to detect a Sneaking character. Implemented within the standard stack-based status system.
+A status that prevents a character from being targeted by single-target or selected-target enemy abilities. AoE effects hit Sneaking characters. Break conditions: using a non-stealth-tagged Action, taking damage (chance-based vs. stealth stacks). Stealth-tagged Actions can be used without breaking Sneaking. Detection (passive or active) allows targeting but does not remove the status. Implemented within the standard stack-based status system.
+
+### Search
+A default Action (via the Combatant system Trait) for active stealth detection. Costs a full turn. Searches the entire map for Sneaking enemies, with detection chance decreasing by range (same zone = high, adjacent = moderate, distant = low). See also: Passive Detection (automatic, same-zone only, no action cost).
 
 ### Morale
 A fighter stat affected by combat events (ally death, kills, heavy damage). May cause debuffs, fleeing, or bonuses. Full design TBD (Phase 4).
 
 ### Defend
-A basic action available to all characters. Increases defensive stats temporarily until the character's next turn.
+A default Action (via the Combatant system Trait) available to all characters. Increases defensive stats temporarily until the character's next turn and provides a Stamina recovery burst.
 
 ### Damage Type
 A classification for damage. 10 types in three families: Physical (Blunt, Piercing, Slashing), Elemental (Fire, Cold, Lightning), Magical (Poison, Shadow, Light, Psychic). No inherent rock-paper-scissors — differences come from affiliated status effects and Perk/equipment interactions.
 
+### Combatant (System Trait)
+A hidden, immutable system Trait at level 1 present on all characters. Not displayed in UI, does not occupy a Trait Slot. Contains a single Perk with default Actions (Attack, Defend, Move, Search) as standard Perk Action components. Ensures all Actions go through the same resolution pipeline — no special-case code for basic actions.
+
+### Effect Resolution Order
+Within a single Action or Trigger, effect components resolve in type order: (1) status/buff/debuff effects, (2) damage/healing effects, (3) movement effects. Components within the same category resolve simultaneously. Defined authoritatively by the [combat](combat.md) spec. Multi-Trigger resolution remains simultaneous (all qualifying Triggers fire together).
+
+### Overkill
+The amount of excess damage dealt beyond 0 HP when a character is reduced to Fallen. Tracked per Fallen character and used as a factor in post-combat injury severity rolls — higher overkill increases both the chance and severity of injuries.
+
+### Injury Check
+A tiered post-combat roll for Fallen characters in non-exhibition events. Tier 1 determines if an injury occurs (modified by overkill, Endurance, Luck, Perks). Tier 2 determines severity: minor (temporary penalty), major (significant penalty), critical (permanent Potential reduction or slot loss), or death. Exhibition events skip injury checks entirely.
+
+### Resistance (Combat)
+A per-damage/status-type defensive value. Status effects always apply (no binary resist roll). Resistance provides dual reduction: reduces the number of status stacks applied AND reduces damage of that type. Sources: Attributes, Perks, equipment, status effects.
+
+### Judgment
+A derived combat stat. 40% Awareness + 35% Willpower + 25% Intellect (× scaling multiplier). Controls AI decision quality via two parameters: tactical-vs-personality blend (how much the character weighs objective effectiveness vs personality impulses, range ~0.3 to ~0.95) and selection sharpness (how reliably the character picks the top-scoring Action, range ~1 to ~10). Modified by Star Rating, Perks, equipment affixes, and status effects. High Judgment = near-optimal play; low Judgment = personality-driven, impulsive behavior.
+
+### Consideration
+The atomic unit of AI reasoning in the Utility AI system. A function that evaluates game state and returns a score for a specific Action. Two types: Gates (binary pass/fail) and Scorers (continuous preference signal). Defined as part of each Perk Action's data model. See [combat-ai](domains/combat-ai.md).
+
+### Gate (AI)
+A binary Consideration (0.0 or 1.0) that acts as a hard prerequisite for an Action. Any Gate returning 0 vetoes the Action entirely. Standard Gates: resource_gate, cooldown_gate, range_gate, target_exists_gate.
+
+### Scorer (AI)
+A continuous Consideration (0.01–1.0, never exactly 0) that evaluates how good an Action is in the current context. Scorers within a track are multiplied together and normalized via geometric mean. Two tracks: Tactical (objective effectiveness) and Personality (character temperament).
+
+### Tactical Score
+The normalized product of all Tactical Scorers for an Action. Represents objective combat effectiveness — "how good is this Action right now?" All Actions have Tactical Scorers.
+
+### Personality Score
+The normalized product of all Personality Scorers for an Action. Represents how well an Action fits the character's temperament. Derived from personality archetype tags on Core Traits (Aggressive, Cautious, Protective, Vindictive, Showoff). Defaults to 0.5 (neutral) for Actions without Personality Scorers or characters without personality archetypes.
+
+### Utility Score
+The blended final score for an Action: `judgment_blend × tactical_score + (1 - judgment_blend) × personality_score`. Used by the selection mechanism (weighted random with Judgment-controlled sharpness) to choose which Action the character takes.
+
+### Selection Sharpness
+A parameter derived from Judgment (range ~1 to ~10) that controls how reliably the AI picks the top-scoring Action. Applied as an exponent: `selection_weight = final_score ^ (1 + sharpness)`. Low sharpness = unpredictable, characterful; high sharpness = consistent, optimal.
+
+### Response Curve
+A function that maps raw game-state values to the 0.01–1.0 output range for Scorers. Common shapes: linear, logistic (S-curve), exponential, step. Each Scorer definition includes curve parameters (thresholds, slopes, inflection points) as part of its data.
+
+### Personality Archetype
+A content-level tag on Core Traits that represents a character's temperament. Feeds the combat AI's Personality Score track. Five standard archetypes: Aggressive, Cautious, Protective, Vindictive, Showoff. A character can have multiple archetypes from multiple Core Traits. New archetypes can be added by extending the vocabulary.
+
 ### Resource
-A pool spent to use certain Actions. Default resources (all characters): Health, Stamina. Trait-defined resources belong to five Resource Families: Mana (Arcane), Faith (Divine), Spirit (Primal), Focus (Psychic), and Stamina bonus (Martial). See Resource Family.
+A pool spent to use certain Actions. Default resources (all characters): Health, Stamina. Trait-defined resources belong to five default types: Mana (Arcane), Faith (Divine), Spirit (Primal), Focus (Psychic), plus content-author-defined types. See Resource Pool in Traits & Perks section.
 
 ---
 
@@ -327,4 +390,4 @@ A future system for facility upgrades (barracks, training grounds, infirmary, fo
 
 ---
 
-_Last updated: 2026-02-14 — Round 3: Resource Family → Resource Pool (emergent from Perks, open/extensible), Perk (scaling curve, shared amplification, soft component limit), Perk Discovery (cap override is acquisition-only, full tree wasted), Bond Trait (one per Group), Tag (auto-tags from resources)_
+_Last updated: 2026-02-17 — Combat AI Utility AI system: added Judgment, Consideration, Gate, Scorer, Tactical Score, Personality Score, Utility Score, Selection Sharpness, Response Curve, Personality Archetype. Previous: 2026-02-16 combat interrogation updates._

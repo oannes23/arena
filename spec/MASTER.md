@@ -41,7 +41,8 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | Area | Doc | Status | Notes |
 |------|-----|--------|-------|
 | System Overview | [overview.md](architecture/overview.md) | 🟡 | Philosophy, constraints, non-goals, star rating system |
-| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation (Actions, Stat Adjustments, Triggers with typed fields). |
+| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation: Actions (target tags, effect component list, speed, cooldown, resource costs), Stat Adjustments (two subtypes: flat `{stat_key, value}` and tag-scoped `{tag, stat_key, value, value_type: "flat"|"percentage"}`), Triggers (event type, effect component list). Effect components use generic typed format (type tag + key-value parameters). Prerequisite graph must be acyclic (content validation). **From combat**: Hidden system Trait type (Combatant), Soak/Penetration/Crit as stat categories, tiered injury roll data (two-tier check with overkill factor), overkill tracking per Fallen character, target tag vocabulary, Trigger event vocabulary (24+ event types), effect component type catalog (11+ types with parameters). |
+| Meta-Balance | [meta-balance.md](architecture/meta-balance.md) | 🔴 | **NEW** — Automatic underdog balancing system: win/loss ratio tracking per Trait, automatic bonuses for underperforming Traits/builds. Cross-cutting system affecting combat, tournaments, and economy. **From traits-and-perks**: build diversity philosophy relies on this system as a fourth pillar alongside economic scarcity, content variety, and roster pressure. |
 | MVP Scope | [mvp-scope.md](architecture/mvp-scope.md) | 🟡 | MVP 0 / MVP 1 boundaries, parking lot |
 
 ---
@@ -53,15 +54,15 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | # | Area | Doc | Status | Phase | Key Open Questions |
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
-| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | None — MVP content examples deferred to implementation, combat-triggered Trait discovery deferred to later phase. Resource pool system now open/extensible (not fixed 5 families). |
-| 3 | Combat | [combat.md](domains/combat.md) | 🔄 | 1 | 26 open questions — resolution details, stealth, morale, initiative formula. **Needs revision**: attributes expanded 4→9, multi-attribute blending, Luck crit/resistance mechanic. **From characters**: Stamina exhaustion (0→Health drain), Stamina regen + Defend boost, 15 derived stat formulas with locked weight ratios, Magic Defense stat, per-stat scaling multipliers (Health ×10 baseline), Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?), injury/death roll mechanics for non-exhibition Fallen characters, ephemeral combatant lifecycle (creation/teardown), post-battle recruitment check (Charisma/Luck/Awareness → Named NPC generation). **From traits-and-perks**: Open/extensible resource pool system (attribute base + Perk bonus capacity, 5 defaults + content-authored types), multi-resource Action costs (any combo of pools), resource pool regen (full start + slow per-tick regen, formula owned by combat), simultaneous Trigger resolution (all fire together, no ordering), Perk Discovery trigger specifics (Actions + Triggers, not passive Stat Adjustments, rarity-weighted roll, full tree = wasted), Trait/Perk level amplification multipliers — shared curve ×1.0/×1.2/×1.4/×1.7/×2.0 (tuning values) |
-| 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟡 | 2 | Trigger granularity, personality override model, NPC AI |
-| 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves |
+| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | None — MVP content examples deferred to implementation, combat-triggered Trait discovery deferred to later phase, underdog balancing deferred to meta-balance spec. All structural, mechanical, implementation precision, and game design questions resolved through 6 rounds. |
+| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | None — 7 rounds of interrogation resolved 27 decisions. Remaining items are tuning values (Soak K constant, global Initiative multiplier, crit bonus formula, resistance curves, injury tables) and deferred systems (Morale Phase 4, channeled abilities Phase 2+, zone variants Phase 4). All upstream decisions from characters and traits-and-perks integrated. Canonical vocabularies defined (target tags, Trigger events, effect component types). |
+| 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | None — all 8 original open questions resolved. Replaced priority-list model with Utility AI system. Defined Consideration architecture (Gates + Scorers), Judgment derived stat, two-track scoring (Tactical + Personality), selection sharpness, Perk-embedded AI definitions, player config as weight overrides, NPC AI parity. Remaining items are tuning values (blend/sharpness functions, response curve parameters, personality archetype weights). |
+| 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves. **From combat**: Penetration as valid affix stat (reduces Soak before formula), crit bonus affixes, stealth-tagged effects. |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
 | 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services. XP earn rates per fight (per-character). Hiring cost should factor starting Trait count. **From traits-and-perks**: Trainer service fees (gold) for Trait/Perk leveling, respec gold cost formula, XP cost schedule (100/300/600/1000/1500) interactions, Group-specific trainer fee model (specialist vs. generalist pricing differences), XP cost as natural gate for high-star Traits on low-star characters |
-| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★), one Bond Trait per Group per character, each Group defines exactly one Bond Trait |
+| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★), one Bond Trait per Group per character, each Group defines exactly one Bond Trait. Note: Bond level no longer has a special Perk Discovery bonus — discovery is driven by Trait Level Multiplier (universal across all categories). |
 | 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations, character dismissal/firing mechanics, Free Agent recruitment, post-battle recruitment flow |
-| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state) |
+| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state). **From traits-and-perks**: Star-gated tournament entry to manage power gaps. Per-combat cooldown reset means no cross-fight cooldown attrition. **From combat**: Exhibition events skip injury checks. Non-exhibition events trigger tiered injury rolls with overkill severity. Per-combat resource/cooldown resets between rounds. Post-combat phased presentation per round. Target match length 15–25 ticks shapes tournament pacing. |
 | 11 | Quests | — | 🔴 | 4+ | Future system. Tasks offered by Groups for rewards. Not yet scoped. |
 
 ---
@@ -72,7 +73,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 
 | Epic | Doc | Status | Blocked By |
 |------|-----|--------|------------|
-| Overview | [overview.md](implementation/mvp-0/overview.md) | 🔴 | Characters, Traits & Perks, Combat specs need interrogation |
+| Overview | [overview.md](implementation/mvp-0/overview.md) | 🔴 | Characters 🟢, Traits & Perks 🟢, Combat 🟢 — all domain specs on critical path are complete. Ready for implementation planning. |
 
 ### MVP 1
 
@@ -105,13 +106,15 @@ characters (primitive — depends on nothing)
     │       │
     │       └──→ roster-management (depends on: characters, economy, traits-and-perks, groups)
     │
-    └──→ economy (depends on: characters)
-            │
-            ├──→ groups (depends on: characters, traits-and-perks, economy)
-            │
-            ├──→ roster-management (depends on: characters, economy, traits-and-perks, groups)
-            │
-            └──→ tournaments (depends on: combat, economy, groups)
+    ├──→ economy (depends on: characters)
+    │       │
+    │       ├──→ groups (depends on: characters, traits-and-perks, economy)
+    │       │
+    │       ├──→ roster-management (depends on: characters, economy, traits-and-perks, groups)
+    │       │
+    │       └──→ tournaments (depends on: combat, economy, groups)
+    │
+    └──→ meta-balance (cross-cutting — depends on: combat, traits-and-perks, tournaments)
 ```
 
 **MVP 0 critical path**: characters → traits-and-perks → combat
@@ -121,6 +124,114 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-17: Combat AI Spec — Utility AI System (Complete)
+
+- **Major rewrite**: Replaced priority-list model with **Utility AI** system. Status updated from 🟡 to 🟢 Complete. All 8 original open questions resolved.
+- **Utility AI model**: Each turn, AI evaluates all available Actions via weighted Considerations (Gates + Scorers), blends Tactical and Personality scores, selects via weighted random with Judgment-controlled sharpness.
+- **Judgment derived stat**: New derived combat stat (40% Awareness + 35% Willpower + 25% Intellect). Controls tactical-vs-personality blend (~0.3 to ~0.95) and selection sharpness (~1 to ~10). Added to combat.md derived stats.
+- **Consideration system**: Two types — Gates (binary pass/fail prerequisites) and Scorers (continuous 0.01–1.0 preference signals). Standard library: 4 Gates + 11 Tactical Scorers + 5 Personality Scorers. Score composition via geometric mean normalization.
+- **Two-track scoring**: Tactical Score (objective effectiveness) + Personality Score (character temperament). Blended by Judgment. Even at minimum Judgment, 30% tactical weight prevents most suicidal decisions.
+- **Personality archetypes**: Core Traits can be tagged with personality archetypes (Aggressive, Cautious, Protective, Vindictive, Showoff). Feed the Personality Score track. Characters without personality tags get neutral personality.
+- **Perk-embedded AI**: Each Perk Action definition includes an `ai` block (gates, tactical_scorers, personality_scorers). Content authors define AI behavior alongside ability mechanics.
+- **Player config as weight overrides**: Target priority, range preference, Action preferences, consumable triggers — all map to weight multipliers on the scoring system. Phased rollout unchanged (MVP 0: no config, MVP 1: basic, Phase 4: full).
+- **NPC AI parity**: NPCs use the same Utility AI system. Difficulty comes from Judgment stat values and available Perks, not separate code paths.
+- **Personality as soft bias**: Personality modifiers are soft biases via scoring, not hard overrides. Judgment controls influence strength.
+- **Edge cases resolved**: All Gates vetoed (default Actions always pass), AoE friendly fire (net value scoring), resource conservation (fight-phase-aware), action repetition (anti-repetition Scorer), personality vs survival (minimum tactical weight).
+- Updated specs:
+  - `combat.md` — Added Judgment derived stat, updated combat-ai implications
+  - `traits-and-perks.md` — Added AI Considerations to Perk Action data model, personality archetype tags on Core Traits
+  - `glossary.md` — Added 10 new terms: Judgment, Consideration, Gate, Scorer, Tactical Score, Personality Score, Utility Score, Selection Sharpness, Response Curve, Personality Archetype
+
+### 2026-02-16: Combat Spec Interrogation (7 Rounds — Complete)
+
+- Resolved 27 decisions across 7 rounds. Status updated from 🔄 to 🟢 Complete.
+- **Match length**: 15–25 ticks target. Fast, decisive fights — attrition comes from multi-round tournament structure.
+- **Percentage Soak**: Replaced flat Soak with `Reduction % = Soak / (Soak + K)` diminishing returns formula. Added Penetration as counter-stat.
+- **Critical hits**: Extra damage roll after successful hit. Uses Physical Crit / Magic Crit derived stats (Awareness + Luck + Accuracy/Intellect).
+- **Type-ordered effect resolution**: Status/debuff → damage/healing → movement within a single Action. **Overrides** traits-and-perks "simultaneous" model. Updated traits-and-perks spec to reference combat.
+- **Global Initiative Multiplier**: `sqrt(Speed) × ~3.0` per tick. Match-pacing knob independent of character balance.
+- **Action Speed as flat modifier**: Fast action +30 = -70 Initiative cost; slow action -40 = -140 cost. Default Actions have Action Speed 0.
+- **Tick order**: Effects → Initiative → Turns. DoTs/decay happen before anyone acts.
+- **Resistance: dual reduction**: Status always applies (no binary resist). Resistance reduces stacks AND damage of that type.
+- **Haste/Slow dual channel**: Speed modification (permanent) and Initiative gain modification (temporary) are separate, stackable channels.
+- **Stealth rework**: AoE hits Sneaking characters. Non-stealth Actions break stealth; stealth-tagged Actions don't. Damage has chance to break stealth. Passive detection (same-zone, automatic) + Active detection (Search Action, map-wide with range penalties).
+- **No default regen for Trait-granted resources**: Mana, Faith, etc. have no passive regen — comes from Perks/Triggers. Stamina retains slow passive regen.
+- **Hidden Combatant system Trait**: Level 1, invisible, immutable. Provides Attack, Defend, Move, Search as standard Perk Action components. No special-case code for default actions.
+- **Fallen revival**: Yes, via Perks, consumables, rare equipment. Revive at fractional HP.
+- **Overkill → injury severity**: Excess damage tracked, increases injury chance and severity.
+- **Tiered injury checks**: Two rolls — injury yes/no, then severity (minor/major/critical/death). Modified by overkill, Endurance, Luck.
+- **Phased post-combat presentation**: Combat resolution → injury/death → Perk discovery (accept/reject) → recruitment → loot.
+- **Binary range**: In-range or not, no damage falloff.
+- **Formula-based scaling multipliers**: Derive from desired stat ranges, not hand-tuned.
+- **Canonical vocabularies defined**: Target tags (10 MVP tags), Trigger event types (24 events across 8 categories), effect component types (11 types with parameters).
+- **MVP scope**: All 10 damage types + default 5-zone map.
+- **Deferred**: Channeled abilities/interrupts (Phase 2+), Morale (Phase 4), zone variants (Phase 4).
+- Updated traits-and-perks spec: "simultaneous" effect resolution → "type-ordered" per combat decisions. Resource regen note updated.
+- Updated glossary: Soak, Initiative, Action Speed, Sneaking, Defend, Rider Effect revised. Added: Penetration, Critical Hit, Search, Combatant System Trait, Effect Resolution Order, Overkill, Injury Check, Resistance, Global Initiative Multiplier.
+- Flagged downstream specs:
+  - `combat-ai` — stealth/detection trade-offs, Action Speed evaluation, revival priority, resource conservation, 20-40+ Actions per character
+  - `equipment` — Penetration as affix stat, crit bonuses, stealth-tagged effects
+  - `tournaments` — exhibition vs non-exhibition injury handling, overkill severity, phased post-combat per round
+  - `data-model` — hidden Trait type, injury roll data, overkill tracking, expanded vocabulary catalogs
+  - `meta-balance` — combat outcomes feed underdog balancing
+
+### 2026-02-16: Traits & Perks Spec Interrogation (Round 6)
+
+- Resolved 12 game design, consequence, and new idea questions across 3 sub-rounds. Status remains 🟢 Complete.
+- **Discovery rate: no cap**: No hard cap on discovery rate. Small tree size (2-4 discoverable Perks) is the natural limit. At max investment, ~30-40% chance per combat of discovering a Perk is intended — that's the reward for discovery-optimized builds.
+- **Post-combat discovery resolution with rejection**: Discovery rolls happen during combat, but resolution is post-combat (alongside injury checks, NPC recruitment, loot). Player can accept or reject each discovered Perk. Rejected Perks remain in the discovery pool.
+- **Tradeoff Perks via existing components**: Perks can have negative Stat Adjustments and harmful Triggers as built-in tradeoffs. No new Drawback component type — the existing system supports negative values natively. Both positive and negative components scale with level.
+- **Multi-tag additive stacking**: Tag-scoped percentage bonuses from different tags on the same Action stack additively. +10% [Fire] + 15% [Arcane] = +25% total on a [Fire, Arcane] Action.
+- **Equal category combat power**: No Trait category "owns" combat. Core, Role, and Bond Traits can all provide combat-relevant abilities. A character with strong Core + Bond and no Role Traits is a valid combat build.
+- **No Action count limit**: No mechanical limit on Actions per character. AI evaluates all available Actions; situational filtering narrows choices. Flagged as key challenge for combat-ai spec.
+- **Intentional power gap**: Large power difference between star ratings is intended. Gap is breadth (slot count), not depth (individual Trait/Perk power — 1★ characters can have 5★ Traits/Perks). Star-gated tournaments manage matchmaking.
+- **Build diversity philosophy**: Three forces + one system: economic scarcity, content variety, roster pressure, and automatic underdog balancing (win/loss ratio tracking per Trait with automatic bonuses for underperforming Traits).
+- **NEW SPEC: Meta-Balance**: Automatic underdog balancing is a cross-cutting system requiring a new `architecture/meta-balance.md` spec.
+- **Prerequisite graph**: No cycles is the only hard constraint. No max depth. Cross-Trait prerequisites remain allowed. Content validation catches cycles at authoring time.
+- Updated glossary: Perk Discovery (post-combat resolution, accept/reject, no rate cap).
+- Flagged downstream specs:
+  - `combat` — discovery collected during combat, resolved post-combat; tradeoff Perks; multi-tag additive stacking
+  - `combat-ai` — no Action count limit (20-40+ Actions per character); equal combat power from all categories
+  - `tournaments` — star-gated entry; per-combat cooldown reset
+  - `characters` — post-combat phase includes discovery resolution
+  - `meta-balance` (NEW) — automatic underdog balancing system
+
+### 2026-02-16: Traits & Perks Spec Interrogation (Round 5)
+
+- Resolved 5 implementation-precision questions. Status remains 🟢 Complete.
+- **Tag-scoped bonuses: flat or percentage**: Tag-scoped Stat Adjustments can be flat (+5 Soak vs [Poison]) or percentage (+10% [Fire] damage). Multiple percentage bonuses stack additively. Application order: flat bonuses first, then combined percentage as a single multiplier on already-level-scaled values.
+- **Pre-multiplier bonus pool capacity**: Bonus pool capacity from Stat Adjustments (e.g., "+50 Mana pool") adds to the weighted attribute blend before the per-stat scaling multiplier. The multiplier amplifies both base and bonus together, making bonus capacity a powerful investment.
+- **CHANGE: Trait Level Multiplier replaces Bond Level Bonus in Perk Discovery**: The parent Trait's level now multiplies discovery chance using the standard amplification curve (×1.0–×2.0). This is universal across all Trait categories — no Bond-to-Trait association needed. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier`. Perk-granted discovery bonuses scale with level (consistent with all-numeric-outputs-scale rule).
+- **Per-combat cooldown reset**: All cooldowns reset fully between fights. No cross-fight cooldown persistence, even in multi-round tournaments. Consistent with pools starting at full capacity.
+- **Automatic redundant access for shared Perks**: When a character acquires a Trait containing an already-owned Perk, redundant access is granted automatically — no separate purchase needed. Perk Discovery rolls skip already-owned shared Perks.
+- Updated glossary: Stat Adjustment (flat/% tag-scoped, application order), Action (per-combat cooldown), Resource Pool (pre-multiplier bonus), Perk Discovery (Trait Level Multiplier formula).
+- Flagged downstream specs:
+  - `combat` — pre-multiplier bonus pool capacity, tag-scoped % stacking and application order, per-combat cooldown reset, updated Perk Discovery formula (Trait Level Multiplier)
+  - `groups` — Bond level no longer has a special Perk Discovery bonus (replaced by universal Trait Level Multiplier)
+  - `data-model` — tag-scoped Stat Adjustment now has `{tag, stat_key, value, value_type: "flat"|"percentage"}` representation
+
+### 2026-02-15: Traits & Perks Spec Interrogation (Round 4)
+
+- Resolved 14 additional Perk component data model questions. Status remains 🟢 Complete.
+- **Tag-based Action targeting**: Actions specify target tags (e.g., `[Enemy, Single]`, `[Ally, AoE-Zone]`). Combat spec resolves tags to battlefield targets. New targeting modes = new tags.
+- **Effect component list model**: Actions and Triggers express outputs as typed effect component lists (Damage, Heal, ApplyStatus, RemoveStatus, Move, Summon, Shield + extensible). Components have type tag + key-value parameters.
+- **Simultaneous intra-Action effect resolution**: All effect components within a single Action/Trigger resolve simultaneously — consistent with multi-Trigger resolution model.
+- **Shared effect model**: Triggers use the exact same effect component list as Actions. Only difference is activation (automatic vs. chosen).
+- **Stat Adjustments: flat + tag-scoped**: Two subtypes — flat bonuses (any numeric stat: `+5 Might`, `+50 Mana pool`) and tag-scoped bonuses (conditional: `+10% [Fire] damage`, `-15% [Martial] resource cost`). Can modify any numeric value in the system.
+- **Perk Discovery additive modifiers**: Base ~0.1% + flat bonuses from Luck, Bond level, and specific Perks. Exact values are tuning.
+- **Bond Trait hybrid Perks**: Bond Perks grant both utility (discounts, access) and combat capabilities (themed Actions, Stat Adjustments). Not pure utility tax.
+- **Equipment stays equipped after respec**: Consistent with acquisition-only gates. Requirements checked at equip time only.
+- **All numeric outputs scale**: Universal rule — output values scale with level multiplier, costs/cooldowns stay flat. No per-component exceptions.
+- **Illustrative Trigger event types**: OnHit, OnHitBy, OnKill, OnAllyFallen, OnCombatStart, OnTurnStart, OnTurnEnd, OnStatusApplied, OnResourceDepleted. Full vocabulary owned by combat.
+- Updated glossary: Effect Component (new), Target Tag (new), Action (targeting + effects), Stat Adjustment (flat + tag-scoped), Trigger (event types + shared effects), Perk Discovery (additive modifiers).
+- Flagged downstream specs:
+  - `combat` — must define: canonical target tag vocabulary, Trigger event vocabulary, effect component type catalog; simultaneous intra-Action resolution; discovery modifier handling
+  - `combat-ai` — must parse target tags, evaluate tag-scoped bonuses when choosing Actions
+  - `equipment` — acquisition-only requirement checks (gear stays on respec)
+  - `data-model` — Action/Stat Adjustment/Trigger structured representations, effect component generic format
+  - `groups` — Bond combat Perks increase Group combat relevance; Bond level affects discovery chance
+  - `economy` — discovery modifier stacking monitoring
 
 ### 2026-02-14: Traits & Perks Spec Interrogation (Round 3)
 
@@ -279,4 +390,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-14 — Traits & Perks spec interrogation round 3 (emergent resource pools, open/extensible resource types, shared Perk amplification, multi-resource Actions, simultaneous Trigger resolution, no star gate, one Bond per Group, empty categories, Perk scaling curve)._
+_2026-02-17 — Combat AI spec complete: replaced priority-list model with Utility AI system. Judgment derived stat added. All four core specs (characters, traits-and-perks, combat, combat-ai) now 🟢 Complete. Glossary updated with 10 new AI terms._

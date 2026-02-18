@@ -87,7 +87,7 @@ This prevents dump stats and makes diverse builds viable — every attribute con
 
 Derived stats are computed from primary attributes via multi-attribute blends. Weight ratios are locked:
 
-**Combat — 15 Derived Stats:**
+**Combat — 16 Derived Stats:**
 
 | Derived Stat | Weight Formula |
 |---|---|
@@ -106,6 +106,7 @@ Derived stats are computed from primary attributes via multi-attribute blends. W
 | Physical Crit | 40% Awareness + 35% Luck + 25% Accuracy |
 | Magic Crit | 40% Awareness + 35% Luck + 25% Intellect |
 | Crowd Appeal | 60% Charisma + 25% Luck + 15% Awareness |
+| Judgment | 40% Awareness + 35% Willpower + 25% Intellect |
 
 **Utility — Single-Source Stats:**
 
@@ -471,13 +472,13 @@ All character-domain design questions are resolved. The following tuning values 
 | Spec | Implication |
 |------|-------------|
 | [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. Trait generation loot table weights per archetype (weighted pool for Core/Role/Bond rolls at character generation). |
-| [combat](combat.md) | 15 derived stat formulas with locked weight ratios. Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC from defeated enemy archetype). |
+| [combat](combat.md) | 16 derived stat formulas with locked weight ratios (including Judgment for AI quality). Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC from defeated enemy archetype). |
 | [equipment](equipment.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
 | [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. XP earn rates per fight (per-character XP). Character hiring cost should factor starting Trait count. |
 | [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. Group NPC membership effects (vendor inventories, loot table generation, trainer availability). Free Agent pool (persistent Named NPCs not attached to any Group, recruitable by players). Each recruiting Group must have a Bond Trait (guaranteed at generation). |
 | [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. Define activity restrictions during Recovering state (training, Group interactions). Define recovery tick durations (passive healing rate). Character dismissal/firing mechanics. Free Agent recruitment flow. Post-battle recruitment flow (accepting/declining generated Named NPCs). |
 | [tournaments](tournaments.md) | Configurable Health/Stamina reset per event type (Exhibition: full, Championship: partial, PvE: full). Crowd/momentum section needed (Charisma-driven). Define which event types are "lethal" (can cause Dead state vs. only injuries). Exhibition = no injury risk for Fallen characters (safe build testing). |
-| [combat-ai](combat-ai.md) | Personality traits (Phase 3–4) modify AI behavior. |
+| [combat-ai](combat-ai.md) | Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system. Personality archetype tags on Core Traits feed the AI Personality Score track. Awareness, Willpower, and Intellect gain additional importance as contributors to AI quality. |
 
 ---
 
