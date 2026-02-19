@@ -56,7 +56,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
 | 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | Updated 2026-02-18: Perk Discovery model changed to per-Trait end-of-combat roll (active Traits only). Post-combat references updated to post-combat.md. MVP content examples deferred to implementation. All structural/mechanical questions resolved. |
 | 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 14-19 — 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save, summoner revival), summon control capacity budget, mutual elimination draw, non-Stamina resource hard-gating, crit/resistance/stealth formulas resolved, min 1 stack, frozen decay while Fallen, Fallen Resolution in Initiative order, default Attack costs Stamina, formula representation, formula modifier per-category scope, Revive on any ally + `[Fallen]` target tag. 19 rounds total, 100 decisions. |
-| 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟡 | 1 | **NEW** — Split from combat.md. Phased presentation (injury → discovery → recruitment → loot). Injury mechanics (tiered checks, overkill severity). Perk Discovery (per-Trait end-of-combat roll, active Traits only). Recruitment and loot phases are placeholders. |
+| 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟢 | 1 | Updated 2026-02-18: 8 interrogation rounds, 18 decisions. Injury mechanics fully specified (diminishing returns formula, Injury Resistance derived stat, tiered severity, named injury catalog, game-tick recovery, death immunity Perks). XP: equal share + participation bonus. Recruitment: NPC generation from event archetype pool, declined → Free Agent. Per-event post-combat configuration. Tournament: full post-combat per round, immediate effects. |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Updated 2026-02-18: Context Flags reference combat.md for canonical schema. resource_efficiency uses fight phase signal. Previous: Round 2 (14 decisions). Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves. **From combat**: Penetration as valid affix stat (reduces Soak before formula), crit bonus affixes, stealth-tagged effects. |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
@@ -129,6 +129,22 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-18: Post-Combat Interrogation — 18 Decisions (Complete)
+
+- **Completed post-combat spec** with 18 decisions across 8 interrogation rounds. Status updated from 🟡 to 🟢 Complete.
+- **Injury mechanics**: Diminishing returns formula `overkill / (overkill + IR × K)`. New derived stat: **Injury Resistance** (50% Endurance + 30% Luck + 20% Willpower). Tiered weighted random severity. Named injury catalog as content data within structural tiers (minor/major/critical/death). Recovery on game ticks (3–5 / 10–15 / 20–30). Perk-based death immunity.
+- **Revived = alive**: Only characters Fallen at combat end get injury checks. Revival fully negates fall risk. Final fall's overkill only.
+- **XP distribution**: Equal share + ticks-survived participation bonus. `character_xp = base_share + (participation_bonus × ticks_active / total_ticks)`.
+- **Recruitment**: NPC generation from event archetype pool (not capturing defeated NPCs). Flat chance per event type. Declined recruits become Free Agents. Not available in tournaments. Event-defined Star Rating range.
+- **Per-event post-combat configuration**: Inherited defaults + overrides model. Each event category defines a default profile; individual event templates override fields. Supports injury/discovery/recruitment/loot/XP toggles plus gold reward/cost and placement scaling.
+- **Reward scaling**: Placement-proportional (1st=100%, 2nd=60%, 3rd=40%, 4th+=25%). Applies to gold, XP, loot, recruitment. Injury and discovery are not scaled.
+- **Tournament post-combat**: Full post-combat per round. Injuries immediate (persist across rounds, no recovery). Discoveries usable next round. No recruitment.
+- **Crowd Appeal**: Tournament-specific only — does not affect standard post-combat rewards.
+- Updated specs:
+  - `post-combat.md` — Full rewrite: 18 decisions, all phases specified
+  - `glossary.md` — 2 new terms (Injury Resistance, Post-Combat Configuration). 2 updated (Injury Check, Overkill).
+  - Downstream flagged: characters (Injury Resistance derived stat #17), economy (XP pools, hiring costs, healing costs), tournaments (per-round post-combat, compounding injuries), roster-management (Free Agent generation from declined recruits), data-model (injury catalog, post-combat profile schema)
 
 ### 2026-02-18: Combat Rounds 14-19 — 18 Additional Decisions
 
@@ -505,4 +521,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-18 — Combat rounds 14-19: 18 additional decisions (100 total across 19 rounds). Revival mechanics, summon control capacity, formula shapes resolved (crit, resistance, stealth break), Fallen resolution order, formula representation, default action costs, Revive on any ally + [Fallen] target tag. Updated combat.md, glossary.md, combat-ai.md, MASTER.md. Five core specs remain 🟢 Complete; post-combat.md at 🟡._
+_2026-02-18 — Post-combat interrogation complete: 18 decisions across 8 rounds. Injury mechanics, XP distribution, recruitment (NPC generation), per-event configuration, tournament post-combat. Updated post-combat.md (🟡→🟢), glossary.md, MASTER.md. Six core specs now 🟢 Complete._
