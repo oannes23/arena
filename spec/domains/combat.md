@@ -1,6 +1,6 @@
 # Combat — Domain Specification
 
-**Status**: 🟢 Complete (updated 2026-02-18: rounds 10-13 — 11 additional decisions: weapon-type formulas, zone adjacency, DoTs bypass Soak, stun, summons)
+**Status**: 🟢 Complete (updated 2026-02-18: rounds 14-19 — 18 additional decisions: revival mechanics, summon control capacity, resistance/crit/stealth formulas, Fallen resolution order, formula representation, default action costs)
 **Last interrogated**: 2026-02-18
 **Last verified**: —
 **Depends on**: [characters](characters.md), [traits-and-perks](traits-and-perks.md)
@@ -21,7 +21,7 @@ Combat is the core gameplay loop — automated tactical fights between teams of 
 - **Scale**: 1v1 to 20v20. **2+ teams supported** — free-for-all, multi-faction, and asymmetric sizes (3v5, 1v10, etc.) are all valid configurations. "Enemy" = anyone not on your team.
 - **Automation**: Pre-configured AI orders; combat executes automatically (idle/auto-battler). **Simulation-first**: the combat engine runs the entire fight to completion, then presents results (see [Combat Event Stream](#combat-event-stream--deterministic-simulation)).
 - **Player interaction**: Configure builds and AI before combat; review results after (dramatized summary + detailed event logs).
-- **Win condition**: Elimination with **per-team elimination order**. Last team standing = 1st place. Teams are ranked by elimination order (last eliminated = 2nd, second-to-last = 3rd, etc.). Teams eliminated on the same tick share the same placement rank (next rank skipped). The Attrition Ramp (see below) ensures fights always converge to a conclusion.
+- **Win condition**: Elimination with **per-team elimination order**. Last team standing = 1st place. Teams are ranked by elimination order (last eliminated = 2nd, second-to-last = 3rd, etc.). Teams eliminated on the same tick share the same placement rank (next rank skipped). **Mutual elimination** (all remaining teams eliminated on the same tick) results in a **draw** — all teams share 1st place, consistent with the same-tick shared rank rule. The Attrition Ramp (see below) ensures fights always converge to a conclusion.
 - **Target match length**: 25–150 ticks. The range reflects fight variety: short PvE fodder encounters at the low end (~25 ticks), standard tournament matches in the middle (~50–80 ticks), and epic championship finals at the high end (~100–150 ticks). Controlled via the global Initiative multiplier and team composition.
 
 ### Spatial System — Zones and Ranges
@@ -60,7 +60,7 @@ Each combat tick resolves in a fixed order:
 1. **Effects Phase**: Per-tick status effects resolve (DoT damage, stack decay, regen ticks, environmental hazards)
 2. **Initiative Phase**: All characters add `sqrt(Speed) × global_initiative_multiplier` to their Initiative meters
 3. **Turns Phase**: Characters whose Initiative ≥ 100 take their turns in **global Initiative order** (highest first, with tie-breaking rules), interleaved between teams — there is no team-alternating turn structure. Characters evaluate and act **sequentially** — board state updates after each character acts, so later characters react to the updated state. See [combat-ai](combat-ai.md) for team coordination details.
-4. **Fallen Resolution**: All characters whose HP dropped below 1 at any point during this tick enter the Fallen state. Overkill values are recorded. `OnFallen` Triggers fire. Dying Blow Actions taken during the Turns Phase are recorded in the Combat Scoreboard.
+4. **Fallen Resolution**: A pure HP check at tick end — all characters whose HP is below 1 at this point enter the Fallen state. **Healing saves**: if a character was reduced below 0 HP earlier in the tick but healing (from allies, self-heal via Dying Blow, or Triggers) brought them back above 0 HP before this step, they do **not** enter Fallen. Characters enter Fallen in **reverse Initiative order** (lowest Initiative first); `OnFallen` Triggers fire sequentially in this order. Overkill values are recorded (overkill = abs(final_HP) regardless of damage source, including DoTs). Dying Blow Actions taken during the Turns Phase are recorded in the Combat Scoreboard.
 
 **One turn per tick**: Each character acts **at most once per tick**. If a character's Initiative remains ≥ 100 after acting (e.g., fast Action with high Speed), the excess carries over to the next tick. Very fast characters can act in consecutive ticks before anyone else gets a turn — appearing to chain actions — but each action is in a separate tick.
 
@@ -111,10 +111,10 @@ Both channels stack — a character can have both increased Speed AND an Initiat
 A standard turn: **one Action**. All characters have access to default Actions via the hidden Combatant system Trait (see [Default Actions](#default-actions--combatant-system-trait) below). Additional Actions come from Perks.
 
 **Default Actions** (available to all characters):
-- **Attack**: Standard damage using equipped weapon's formulas. If no weapon equipped, uses a weak **unarmed attack** (Blunt damage, attribute-scaled with Might). See [Attack & Damage Formulas](#attack--damage-formulas).
-- **Move**: Change zones (costs full turn)
-- **Defend**: Fixed percentage boost to Defense and Soak until next turn; provides a Stamina recovery burst equal to Y% of max Stamina pool (tuning value)
-- **Search**: Active stealth detection — searches entire map (see [Stealth & Detection](#stealth--detection))
+- **Attack**: Standard damage using equipped weapon's formulas. If no weapon equipped, uses a weak **unarmed attack** (Blunt damage, attribute-scaled with Might). **Costs a small amount of Stamina** (tuning value). See [Attack & Damage Formulas](#attack--damage-formulas).
+- **Move**: Change zones (costs full turn). **Free** (no resource cost).
+- **Defend**: Fixed percentage boost to Defense and Soak until next turn; provides a Stamina recovery burst equal to Y% of max Stamina pool (tuning value). **Free** (no resource cost).
+- **Search**: Active stealth detection — searches entire map (see [Stealth & Detection](#stealth--detection)). **Free** (no resource cost).
 
 **Perk-granted Actions**: Active abilities with variable Action Speed, cooldowns, and resource costs. All cooldowns reset fully between fights (per-combat only — see [traits-and-perks](traits-and-perks.md)).
 
@@ -203,7 +203,32 @@ Attack Value and Damage Value are **weapon-type-defined** — each weapon type s
 - "Charismatic Hitter": substitute Charisma for Might in all Damage formulas
 - **Conflict resolution**: When multiple modifiers target the same formula slot, the system evaluates all substitute candidates and uses whichever attribute value is **highest** for the character. The player always benefits from their best available option.
 
+**Per-category scoping**: Each formula modifier tag specifies a **formula category scope** — which category of formulas it applies to (attack, damage, defense, healing, etc.). "Intelligent Strikes" applies to *attack* formulas only; "Charismatic Hitter" applies to *damage* formulas only. A modifier can target multiple categories if desired. This prevents a single modifier from universally replacing an attribute across all formulas.
+
 Formula modifier tags are checked at formula evaluation time. They modify the attribute used in the calculation, not the formula structure itself.
+
+### Formula Representation
+
+Formulas throughout the combat system use a **structured weighted list** format for the common case, with an optional expression override for complex Perks/spells:
+
+**Standard format** (~95% of formulas):
+```
+{
+  base: <flat_value>,
+  weights: { <attribute>: <weight>, ... }
+}
+```
+Example: Physical Soak = `{ base: 0, weights: { Endurance: 0.60, Might: 0.25, Speed: 0.15 } }` (× scaling multiplier)
+
+**Override format** (complex Perks/spells):
+```
+{
+  formula_override: "<expression_string>"
+}
+```
+Example: A Perk that scales with both missing HP and Willpower = `{ formula_override: "20 + (missing_hp_pct × 0.5 × Willpower)" }`
+
+The structured format is preferred because it is machine-inspectable (AI Scorers can read weights, the balance system can analyze formulas, and modifier tags can substitute attributes). The expression override exists as an escape hatch for complex Perks or unique spell mechanics that cannot be expressed as a simple weighted blend.
 
 ### DoT Damage Rules
 
@@ -232,6 +257,10 @@ The Summon effect component creates **Ephemeral Combatants** (from [characters](
 - Team membership matches the summoner
 - **Disappearance**: Summoned entities disappear when killed (enter Fallen) or when their summoner enters Fallen state (end-of-tick Fallen resolution removes both)
 - Summoned entities do NOT trigger post-combat phases (no injury checks, no Perk discovery, no recruitment)
+
+**Summon Control Capacity**: Summoners are limited by a **control capacity budget** — a Resource Pool granted by summoner Traits. Each summoner Trait that enables summoning defines a control capacity pool (e.g., "Necro Control" = 0.8×Willpower + 0.2×Charisma). Each summon type has a **control cost**. The summoner can maintain summons up to their total capacity; dying summons free capacity for new summons. This is a budget-based system, not a per-Perk cap — a summoner with 100 capacity can field five 20-cost skeletons or two 50-cost golems.
+
+**Revived summoner**: If a summoner is revived mid-combat, their summons remain dead (they were removed during Fallen resolution). The summoner must re-summon using their restored control capacity.
 
 ### Stun Mechanics
 
@@ -273,7 +302,8 @@ This means a single Action can debuff a target's Soak and then deal damage again
 - **Chance**: Derived from Physical Crit (40% Awareness + 35% Luck + 25% Accuracy) or Magic Crit (40% Awareness + 35% Luck + 25% Intellect), based on the Action's primary damage type. For Actions without a primary damage type (pure heals/buffs), uses the higher of the two crit stats.
 - **Trigger**: Checked after a successful hit, or for non-attack Actions, checked when the Action resolves (Step 2 of the pipeline)
 - **Universal effect**: Crits apply to **all** effect component types. A crit adds a bonus amount to each component's output — bonus damage for Damage components, bonus healing for Heal components, bonus HP for Shield components, bonus stacks for ApplyStatus, etc.
-- **Scaling**: Crit chance and crit bonus can be modified by Perks and equipment
+- **Crit bonus formula**: `output = base × (1 + crit_multiplier)`. The `crit_multiplier` is a tuning value (e.g., 0.5 for +50% bonus on crit). This is a percentage of the base output, not a flat addition or separate roll.
+- **Scaling**: Crit chance and crit multiplier can be modified by Perks and equipment
 
 ### Damage Types
 
@@ -291,7 +321,8 @@ This means a single Action can debuff a target's Soak and then deal damage again
 
 **Stack-Based Mechanics**:
 - Max stacks: 9999 (effectively unlimited)
-- Decay: Variable per status type
+- **Minimum stacks**: Status effects always apply at least **1 stack**, even after Resistance reduction. Resistance can reduce 10 stacks to 1, but never to 0. This ensures status effects remain a reliable (if weakened) offensive tool.
+- Decay: Variable per status type. **Frozen while Fallen**: status effects do **not** tick down while a character is in the Fallen state. If a Fallen character is revived, their status effects resume from where they were.
 - Application: From rider effects, Triggers, environmental hazards, Perks
 
 **Resistance Model**:
@@ -302,7 +333,12 @@ This means a single Action can debuff a target's Soak and then deal damage again
 - Resistance is tunable per-status-type — some statuses may weight resistance more toward stack reduction, others toward damage reduction
 - Sources: Attributes (e.g., Willpower for mental statuses), Perks, equipment, other status effects
 
-*Example*: An attack applies 10 stacks of Burning. The defender has Fire Resistance 40. The resistance formula reduces the applied stacks (e.g., 10 → 6 stacks) AND reduces Fire damage taken (e.g., 40% damage reduction from Fire sources). Exact formulas are tuning values.
+**Resistance Formulas** (percentage with diminishing returns — parallels Soak formula):
+- **Stack reduction**: `stacks_applied = base_stacks × (1 - resist_ratio)` where `resist_ratio = Resistance / (Resistance + K)`. Minimum 1 stack always applies (see above).
+- **Damage reduction**: `damage × (1 - resist_ratio)` using the **same formula and same K** per damage/status type.
+- Both use the same diminishing returns curve as Soak. Higher Resistance is always valuable but never grants immunity. K is a per-type tuning constant.
+
+*Example*: An attack applies 10 stacks of Burning. The defender has Fire Resistance 40 with K=50. `resist_ratio = 40/(40+50) = 0.44`. Stacks applied = `10 × (1 - 0.44) = 5.6 → 6 stacks` (rounded). Fire damage taken is reduced by 44%.
 
 **Status Examples** (numbers are tuning targets, not final):
 
@@ -323,7 +359,7 @@ This means a single Action can debuff a target's Soak and then deal damage again
 - **Break conditions**:
   - Using a non-stealth-tagged Action breaks Sneaking (attacking, casting, etc.)
   - Stealth-tagged Actions can be used without breaking Sneaking (ambush attacks, stealth-specific abilities)
-  - Taking damage has a **chance** to break Sneaking (probability based on damage taken vs. stealth stacks)
+  - Taking damage has a **chance** to break Sneaking: `break_chance = damage_taken / (stealth_stacks × K)` where K is a tuning constant. Linear and transparent — high stealth stacks resist breaking, high damage makes it more likely
   - Being detected by an enemy does NOT automatically break Sneaking — it only allows that enemy to target the Sneaking character
 
 **Detection System** (dual-mode):
@@ -349,6 +385,11 @@ Actions use a **tag-based targeting system** (defined in [traits-and-perks](trai
 | `[All, AoE-Zone]` | Everyone in a target zone (friendly fire) |
 | `[Enemy, AoE-Map]` | All enemies on the map |
 | `[All, AoE-Map]` | Everyone on the map |
+| `[Fallen, Ally, Single]` | One Fallen ally, selected by AI (Revive-only targeting) |
+
+**`[Fallen]` target tag**: Used by Revive-type Actions that exclusively target Fallen allies. Only Actions with the `[Fallen]` tag restrict themselves to Fallen targets.
+
+**Revive on any ally**: The Revive effect component itself works on **any ally target** — if the target is Fallen, the Revive component resurrects them; if the target is not Fallen, the Revive component does nothing but other effect components in the Action still resolve normally. This enables hybrid heal+revive Actions (e.g., `[Ally, Single]` with both Heal and Revive components — heals living allies, revives Fallen ones). Actions that should **only** target Fallen allies use the `[Fallen, Ally, Single]` tag to restrict targeting.
 
 New targeting modes are new tags — no schema changes required. Target tag resolution respects range constraints (each Action specifies its valid range band).
 
@@ -417,6 +458,8 @@ The specific event type catalog is an implementation detail — the spec establi
 - Resource pools start at full capacity at the beginning of combat
 - **Resource scale**: Hundreds to thousands for granular tuning (governed by per-stat scaling multipliers)
 
+**Resource Depletion Rules**: Only Stamina has the Health substitution mechanic (Exhaustion — see [characters](characters.md)). When any other resource pool (Mana, Faith, Spirit, Focus, etc.) is depleted, Actions that require that resource are simply **unavailable** — the `resource_gate` vetoes them. There is no fallback or substitution. This makes resource management a genuine strategic concern for non-Stamina builds.
+
 ### Judgment — AI Quality Stat
 
 Judgment is a derived combat stat that controls how effectively a character's AI evaluates and selects Actions during combat. See [combat-ai](combat-ai.md) for the full Utility AI system.
@@ -482,9 +525,14 @@ The Combatant Trait contains a single Perk with the default Actions (Attack, Def
 
 ### Fallen State and Revival
 
-- **Fallen**: When a character's HP drops below 1, they enter the Fallen sub-state (from [characters](characters.md)). They are out of the fight for its remainder.
+- **Fallen**: When a character's HP drops below 1, they enter the Fallen sub-state (from [characters](characters.md)). They are out of the fight for its remainder (unless revived).
+- **Fallen Resolution is a pure HP check**: At the end of each tick (step 4), the system checks whether HP < 1. If a character was reduced below 0 HP earlier in the tick but was healed back above 0 HP before step 4 (by an ally's Action, a self-heal on a Dying Blow turn, or a Trigger), they are **not** Fallen. Healing saves from Fallen.
+- **Self-save via Dying Blow**: A character at ≤0 HP who takes their turn (Dying Blow) can use a self-heal Action. If the heal brings them above 0 HP before Fallen Resolution, they survive. Consistent rules — no special cases.
 - **Revival**: Fallen characters **can** be revived mid-combat via Perks, consumables, or rare equipment effects. A revived character returns at a fraction of their maximum Health (exact fraction is a tuning value).
-- **Overkill**: The amount of excess damage beyond 0 HP is tracked. Overkill magnitude affects injury severity in the post-combat injury roll — massive overkill increases the chance and severity of injuries.
+- **Revival: clean slate**: All status effects are cleared on revival. The revived character starts fresh — no lingering debuffs, DoTs, or buffs. Only the fractional HP remains from the pre-Fallen state.
+- **Fallen Resolution order**: Characters enter Fallen in **reverse Initiative order** (lowest Initiative first). `OnFallen` Triggers fire sequentially in this order. This means higher-Initiative characters' Fallen Triggers resolve last, which can matter for chain reactions.
+- **Status decay frozen while Fallen**: Status effects do not tick down while a character is in the Fallen state. If revived, statuses resume from where they were (but see "clean slate" above — revival clears all statuses, so this only matters for effects that occur between Falling and potential Revival within the same tick).
+- **Overkill**: The amount of excess damage beyond 0 HP is tracked. Overkill = `abs(final_HP)` regardless of damage source — DoTs, direct damage, and environmental effects all contribute. Overkill magnitude affects injury severity in the post-combat injury roll — massive overkill increases the chance and severity of injuries.
 
 ### Attrition Ramp
 
@@ -619,7 +667,7 @@ The authoritative catalog of effect component types used by Actions and Triggers
 | **Move** | target, direction/zone | Push target 1 zone away |
 | **Shield** | formula, [duration], [damage_types] | Grant 50-point shield for 3 ticks |
 | **Summon** | template, [zone] | Summon a Fire Elemental in current zone |
-| **Revive** | health_fraction | Revive Fallen ally at 25% HP |
+| **Revive** | health_fraction | Revive Fallen ally at 25% HP (does nothing on non-Fallen target; other components still resolve) |
 | **ResourceDrain** | resource_type, amount | Drain 30 Mana from target |
 | **ResourceGrant** | resource_type, amount | Restore 20 Stamina to self |
 
@@ -1040,6 +1088,126 @@ New types can be added without schema changes — the list format is inherently 
 - **Rationale**: Hard stun is the most impactful CC — losing turns entirely is devastating. Willpower-based decay provides a clear counter-stat and prevents permanent stun-lock. High Willpower characters shrug off stun quickly; low Willpower characters are vulnerable.
 - **Implications**: Stun is the most powerful status effect — content must price it accordingly (high resistance, short duration, limited access). AI must factor stun vulnerability into target selection. Stun immunity Perks would be high-value defensive investments.
 
+### Revival: Clean Slate
+
+- **Decision**: All status effects are cleared on revival. A revived character starts fresh — no lingering debuffs, DoTs, or buffs from before they fell. Only the fractional HP remains.
+- **Rationale**: Clean slate is simpler (no "which statuses survive?"), avoids punishing revived characters with pre-death debuffs, and creates a clear mental model: revival = fresh start at low HP.
+- **Implications**: Revival timing matters less from a debuff perspective (no benefit to waiting for debuffs to expire before reviving). Buff-then-revive combos are not viable — the buff would be cleared. Content design should not rely on pre-Fallen status persisting through revival.
+
+### Summon Control Capacity Budget
+
+- **Decision**: Summoner Traits grant a Resource Pool acting as a control capacity budget (e.g., "Necro Control" = 0.8×Willpower + 0.2×Charisma). Each summon type has a control cost. Summoners maintain summons up to capacity; dying summons free capacity for new summons.
+- **Rationale**: Budget-based control is more flexible than per-Perk caps. A summoner can choose many weak summons or few strong ones. Tying capacity to a Resource Pool means it scales with attributes and can be modified by Perks/equipment. Dying summons naturally free capacity, creating dynamic summoning decisions.
+- **Implications**: Summoner Traits need a control capacity Resource Pool definition. Summon templates need a control cost field. AI must factor remaining capacity into summoning decisions. Balance must ensure capacity pools and summon costs produce reasonable summon counts (e.g., 2-5 active summons for a dedicated summoner).
+
+### Mutual Elimination is a Draw
+
+- **Decision**: When all remaining teams are eliminated on the same tick, all share 1st place (draw). Consistent with the existing same-tick shared rank rule.
+- **Rationale**: The shared rank rule already handles same-tick elimination cleanly. Mutual elimination is just the extreme case where all teams eliminate each other simultaneously. No special handling needed — the general rule covers it.
+- **Implications**: Tournament formats must handle draw outcomes (shared 1st). Post-combat flow must handle the case where no team "won" outright.
+
+### Non-Stamina Resource Depletion: Action Unavailable
+
+- **Decision**: Only Stamina has the Health substitution mechanic (Exhaustion). When any other resource pool (Mana, Faith, Spirit, Focus, etc.) is depleted, Actions requiring that resource are simply unavailable — the `resource_gate` vetoes them. No fallback or substitution.
+- **Rationale**: Stamina's Health substitution creates dramatic last-stand moments for physical fighters. Extending this to all resources would eliminate resource management as a strategic concern. Mana depletion means a mage must fall back on default Actions or cheaper alternatives — that's a meaningful build constraint.
+- **Implications**: AI `resource_efficiency` Scorer must conserve non-Stamina resources more aggressively (no safety net). Builds relying on a single non-Stamina resource need regen Perks or will hit a hard wall. Default Actions (Attack, Move, Defend, Search) remain available since they don't cost non-Stamina resources.
+
+### Crit Bonus: Percentage of Base
+
+- **Decision**: Crit bonus formula: `output = base × (1 + crit_multiplier)`. The `crit_multiplier` is a tuning value (e.g., 0.5 for +50% bonus on crit). This applies universally to all effect component types.
+- **Rationale**: Percentage of base scales naturally with ability power — a strong ability crits for more than a weak one. Single multiplier tuning value is simple to balance. Avoids the variance of a separate die roll and the complexity of flat-per-component bonuses.
+- **Implications**: Crit multiplier is a new tuning value. Perks/equipment that increase crit multiplier are powerful (scale with ability strength). Balance must ensure that crit builds with high-base-damage abilities don't become dominant.
+
+### Revive Targeting: Fallen Target Tag
+
+- **Decision**: A new `[Fallen]` target tag allows Actions to exclusively target Fallen allies (e.g., `[Fallen, Ally, Single]`). The Revive effect component itself works on any ally — on non-Fallen targets, the Revive component does nothing but other components still resolve. This enables hybrid heal+revive Actions.
+- **Rationale**: Two complementary mechanisms: the `[Fallen]` tag for Revive-only Actions, and Revive-on-any-ally for hybrid Actions. A "Healing Light" Action with both Heal and Revive can target any ally — it heals the living and revives the Fallen. A "Resurrect" Action with only Revive uses `[Fallen, Ally, Single]` to restrict to Fallen targets.
+- **Implications**: Target tag vocabulary gains `[Fallen]`. AI `revival_priority` Scorer evaluates both Fallen-only and hybrid heal+revive Actions. Content authors choose between dedicated and hybrid Revive Actions based on design intent.
+
+### Revived Summoner: Summons Stay Dead
+
+- **Decision**: If a summoner is revived mid-combat, their previously active summons remain dead. The summoner must re-summon using their restored control capacity.
+- **Rationale**: Summons are removed during Fallen resolution (when the summoner falls). Revival is a fresh start — the summoner returns with clean slate (no statuses, no summons). Automatically restoring summons would be complex and potentially too powerful.
+- **Implications**: Reviving a summoner is less immediately impactful than reviving a direct combatant (the summoner needs turns to rebuild their summon army). AI must factor re-summon cost into revival priority for summoner characters.
+
+### Fallen Status Decay: Frozen
+
+- **Decision**: Status effects do not tick down while a character is in the Fallen state. If a Fallen character were to be affected by any mechanism, their statuses remain at the stacks they had when they fell.
+- **Rationale**: Frozen decay is simpler than continuing to process statuses on inactive characters. Since revival clears all statuses (clean slate), frozen decay's primary purpose is consistency — the system doesn't need to track or process status decay for Fallen characters.
+- **Implications**: Minimal implementation impact — Fallen characters are simply skipped during the Effects Phase. Clean slate on revival makes frozen decay moot in practice, but the rule exists for completeness.
+
+### Healing Saves from Fallen
+
+- **Decision**: Fallen Resolution (step 4 of tick resolution) is a pure HP check. If a character was reduced below 0 HP during the tick but healing brought them back above 0 HP before step 4, they do not enter Fallen.
+- **Rationale**: Pure HP check is the simplest rule — no tracking of "was this character ever at 0 HP?" Just check current HP at tick end. This means healing is a genuine life-saving tool, not just damage mitigation.
+- **Implications**: Fast healers (high Initiative, acting before Fallen Resolution) can save allies who were hit earlier in the tick. Creates dramatic save moments. Self-healing on Dying Blow turns can prevent the character's own death.
+
+### Resistance Formula: Percentage with Diminishing Returns
+
+- **Decision**: Both stack reduction and damage reduction use the same formula: `value × (1 - resist_ratio)` where `resist_ratio = Resistance / (Resistance + K)`. Same K per type for both. Parallels the Soak formula shape.
+- **Rationale**: Using the same diminishing returns curve as Soak creates system consistency — players learn one formula shape and understand both defense mechanisms. Per-type K allows tuning individual resistances without affecting others.
+- **Implications**: K is a per-type tuning constant (or possibly a single global constant like Soak). Balance must tune K alongside stat ranges. Very high Resistance approaches but never reaches immunity. Minimum 1 stack always applies regardless of Resistance.
+
+### Stealth Break: Damage/Stealth Ratio
+
+- **Decision**: Stealth break chance on taking damage uses `break_chance = damage_taken / (stealth_stacks × K)` where K is a tuning constant.
+- **Rationale**: Linear formula is transparent and easy to reason about. More stealth stacks = harder to break. More damage = more likely to break. K controls the overall sensitivity.
+- **Implications**: Stealth break K is a new tuning value. High stealth investment (many stacks) provides genuine protection against chip damage. AoE that deals low damage per target is less likely to break stealth than a big single hit.
+
+### Resistance Damage Reduction: Same Formula, Same K
+
+- **Decision**: Damage reduction from Resistance uses the same `damage × (1 - resist_ratio)` formula and the same K as stack reduction for that type.
+- **Rationale**: One K per type simplifies tuning. If Resistance 40 reduces applied stacks by 44%, it also reduces incoming damage of that type by 44%. Players can reason about resistance strength from a single number.
+- **Implications**: No separate damage-reduction tuning per type — stack and damage reduction are always in lockstep. This means high Resistance provides comprehensive defense against a damage/status type.
+
+### Minimum Stacks: Floor of 1
+
+- **Decision**: Status effects always apply at least 1 stack, even after Resistance reduction. Resistance can reduce 10 stacks to 1 but never to 0.
+- **Rationale**: Minimum 1 stack ensures status effects are reliable offensive tools. An attacker who lands a status-applying ability always gets *something* through, even against high-Resistance targets. This prevents Resistance stacking from creating effective immunity to statuses.
+- **Implications**: Even maximally Resistance-stacked characters are affected by statuses (at reduced potency). Content balance can rely on statuses always having some effect. The 1-stack floor is a hard rule, not a tuning parameter.
+
+### Attack Costs Stamina
+
+- **Decision**: The default Attack action has a small Stamina cost (tuning value). Move, Defend, and Search are free (no resource cost).
+- **Rationale**: A small Stamina cost on Attack creates Stamina pressure even for characters relying on the basic attack — they can't attack indefinitely without eventually triggering Exhaustion. This makes Defend (which recovers Stamina) a meaningful choice even for simple builds. Move, Defend, and Search being free ensures characters always have zero-cost options.
+- **Implications**: Default Attack Stamina cost is a new tuning value. AI must factor this cost into Attack evaluation via `resource_efficiency`. Characters with very low Stamina pools will feel Exhaustion pressure faster from basic attacks alone.
+
+### Formula Representation: Weighted List + Optional Expression
+
+- **Decision**: Formulas use a structured `{base, weights}` format for the common case (~95% of formulas) and an optional `formula_override` expression string for complex Perks/spells.
+- **Rationale**: Structured format is machine-inspectable — AI Scorers can read weights, the balance system can analyze formulas, and formula modifier tags can substitute attributes. Expression override provides an escape hatch for complex mechanics without compromising the simple common case.
+- **Implications**: Formula evaluation engine must support both formats. Content authoring tools should default to the structured format and only expose expression override for advanced use cases. Modifier tags only apply to the structured format (expression overrides handle their own attribute references).
+
+### DoT Overkill Counts
+
+- **Decision**: Overkill = `abs(final_HP)` regardless of damage source. DoT damage, direct damage, environmental effects — all contribute to the overkill value used for post-combat injury severity.
+- **Rationale**: Consistent rule — damage is damage regardless of source. A character who burns to death from DoTs should have the same injury risk as one killed by a sword strike of equal excess damage.
+- **Implications**: DoT-heavy builds can generate overkill just like burst damage builds. Characters under heavy DoTs who are about to fall should be healed or shielded to reduce overkill, creating tactical depth.
+
+### Self-Save via Dying Blow
+
+- **Decision**: A character at ≤0 HP who takes their turn (Dying Blow) can use a self-heal Action. If the heal brings them above 0 HP before Fallen Resolution (step 4), they survive. Consistent rules — no special cases.
+- **Rationale**: If Fallen Resolution is a pure HP check, then any healing that brings HP above 0 should prevent Fallen — including self-healing on a Dying Blow turn. Special-casing self-saves would add complexity for no gameplay benefit.
+- **Implications**: Characters with self-heal abilities have a natural survival advantage on Dying Blow turns. AI must evaluate self-heal as a high-priority option during Dying Blow turns. Content can create "Second Wind" style Perks that are specifically designed for self-save scenarios.
+
+### Formula Modifier Scope: Per-Category
+
+- **Decision**: Each formula modifier tag specifies a **formula category scope** — which categories of formulas it applies to (attack, damage, defense, healing, etc.). A modifier can target multiple categories.
+- **Rationale**: Per-category scoping prevents a single modifier from universally replacing an attribute across all formulas. "Intelligent Strikes" should make Intellect replace Accuracy in *attack* formulas, not in defense or healing formulas too. This is important for balance — universal attribute replacement would be too powerful.
+- **Implications**: Formula modifier data model gains a `scope` field (list of formula categories). Content authors must specify which categories each modifier affects. The formula evaluation engine checks scope before applying modifiers.
+
+### Fallen Resolution: Initiative Order
+
+- **Decision**: Characters enter Fallen in **reverse Initiative order** (lowest Initiative first). `OnFallen` Triggers fire sequentially in this order.
+- **Rationale**: Initiative order provides a deterministic, meaningful ordering for Fallen resolution. Lowest-Initiative characters fall first, which means higher-Initiative characters' Triggers fire last — potentially benefiting from the state changes caused by earlier Triggers. Sequential processing (not simultaneous) ensures clear cause-and-effect chains.
+- **Implications**: High-Initiative characters who fall on the same tick get their Triggers processed after lower-Initiative characters. This creates a subtle advantage for Speed investment. OnFallen Trigger chains are deterministic and ordered.
+
+### Revive Works on Any Ally
+
+- **Decision**: The Revive effect component works on any ally target. On a non-Fallen target, Revive does nothing — but other effect components in the Action still resolve normally. This enables hybrid heal+revive Actions.
+- **Rationale**: Allowing Revive on any target (with no-op on living allies) enables versatile hybrid Actions without requiring separate "heal" and "revive" versions. A single "Healing Light" Action with Heal + Revive components can serve both purposes. The `[Fallen]` target tag still exists for dedicated Revive-only Actions that should only be used on Fallen allies.
+- **Implications**: AI must evaluate hybrid heal+revive Actions for both living and Fallen ally targets. Content authors can create versatile support Actions that combine healing and revival. The `[Fallen]` tag remains for Actions that should exclusively target Fallen allies.
+
 ---
 
 ## Open Questions
@@ -1049,10 +1217,10 @@ Most original questions are resolved. Remaining items are tuning values and defe
 ### Tuning Values
 1. **K constant for Soak formula**: What value of K in `Soak[family]/(Soak[family]+K)` produces the desired damage reduction curve? Needs testing with target stat ranges.
 2. **Global Initiative Multiplier exact default**: ~3.0 is the starting point; actual value depends on desired actions-per-character-per-fight.
-3. **Crit bonus formula**: How much bonus does a crit add to each effect component type? Flat bonus, percentage of base value, or separate die? (Now applies universally to all component types, not just damage.)
-4. **Stealth break-on-damage probability formula**: How does damage taken vs. stealth stacks determine break chance?
+3. ~~**Crit bonus formula**~~: **Resolved** — percentage of base: `output = base × (1 + crit_multiplier)`. Crit multiplier is a tuning value (e.g., 0.5 for +50%).
+4. ~~**Stealth break-on-damage probability formula**~~: **Resolved** — `break_chance = damage_taken / (stealth_stacks × K)`. K is a tuning value.
 5. **Revival Health fraction**: What percentage of max HP does a revived character return with?
-6. **Resistance reduction formulas**: Exact formulas for how resistance reduces stacks and damage (per-type tuning curves).
+6. ~~**Resistance reduction formulas**~~: **Resolved** — percentage with diminishing returns: `value × (1 - resist_ratio)` where `resist_ratio = Resistance / (Resistance + K)`. Same formula and K for both stack reduction and damage reduction per type.
 7. **Judgment scaling multiplier and mapping functions**: Per-stat scaling multiplier for Judgment, and the functions mapping Judgment to tactical-vs-personality blend (0.3–0.95), selection sharpness (1–10), and lookahead depth (1–10 ticks).
 8. **Stamina regen percentage**: What X% of max pool per tick produces good Stamina pacing?
 9. **Defend boost percentages**: What fixed % boost to Defense/Soak and what Y% Stamina burst feels right for the Defend action?
@@ -1060,6 +1228,11 @@ Most original questions are resolved. Remaining items are tuning values and defe
 11. **Perk Discovery per-Trait rate**: What base rate per qualifying Trait produces similar per-fight discovery rates to the old per-use model?
 12. **Per-family Soak scaling multipliers**: What scaling multipliers for the 3 Soak families produce desired damage reduction ranges at target attribute levels?
 13. **Physical Defense scaling multiplier**: What scaling multiplier for Physical Defense produces the desired hit/miss rates?
+14. **Default Attack Stamina cost**: What small Stamina cost for the default Attack action creates meaningful Stamina pressure without being prohibitive?
+15. **Crit multiplier value**: What `crit_multiplier` (e.g., 0.5 for +50%) produces good crit impact?
+16. **Stealth break K constant**: What K in `damage_taken / (stealth_stacks × K)` produces the desired stealth fragility?
+17. **Resistance K constant(s)**: What K per resistance type in `Resistance / (Resistance + K)` produces desired stack/damage reduction curves?
+18. **Summon control capacity multipliers**: What per-Trait capacity formulas and per-summon control costs produce desired summon counts (2-5 for dedicated summoners)?
 
 ### Deferred Systems
 12. **Morale**: Full design deferred to Phase 4.
@@ -1076,7 +1249,7 @@ Most original questions are resolved. Remaining items are tuning values and defe
 
 | Spec | Implication |
 |------|-------------|
-| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection across 2+ teams ("enemy" = not my team). AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system (blend, sharpness, and lookahead depth). Combat log must record AI scoring data (top 3 Actions per turn with scores). Combat system passes context flags to AI at fight start (canonical schema defined here). Characters within a tick act sequentially in Initiative order with state updates between each. `resource_efficiency` Scorer uses fight phase signal (current_tick / attrition_ramp_onset) for conservation strategy. AI must factor shield HP and per-type Soak into target vulnerability and damage output assessments. AI must evaluate primary damage type choice for mixed Actions (which Defense is weaker). Dying Blow Actions need AI handling (character at ≤0 HP still acts). |
+| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection across 2+ teams ("enemy" = not my team). AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system (blend, sharpness, and lookahead depth). Combat log must record AI scoring data (top 3 Actions per turn with scores). Combat system passes context flags to AI at fight start (canonical schema defined here). Characters within a tick act sequentially in Initiative order with state updates between each. `resource_efficiency` Scorer uses fight phase signal (current_tick / attrition_ramp_onset) for conservation strategy. AI must factor shield HP and per-type Soak into target vulnerability and damage output assessments. AI must evaluate primary damage type choice for mixed Actions (which Defense is weaker). Dying Blow Actions need AI handling (character at ≤0 HP still acts). **Rounds 14-19**: AI must evaluate hybrid heal+revive Actions for both living and Fallen allies. AI must factor self-heal as a high-priority Dying Blow option. AI must evaluate summon control capacity when deciding to summon. Default Attack Stamina cost feeds into `resource_efficiency` Scorer. |
 | [post-combat](post-combat.md) | Combat hands off to post-combat at victory/defeat. Provides: Combat Scoreboard (per-character stats including Dying Blows), Fallen list with overkill values, active Traits list (for Perk Discovery), Context Flags (exhibition status, event type), per-team elimination order/placement. Post-combat owns: injury/death checks, Perk Discovery resolution, recruitment, loot distribution. |
 | [characters](characters.md) | 9 Attributes feed all combat calculations via derived stat formulas (including Judgment, Physical Defense, 3 Soak families). **New derived stats**: Physical Defense (40% Speed + 35% Accuracy + 25% Awareness), Physical Soak (60% Endurance + 25% Might + 15% Speed), Elemental Soak (45% Endurance + 35% Awareness + 20% Luck), Magical Soak (55% Willpower + 25% Intellect + 20% Luck). Anatomical slots determine weapon/armor options. Stamina exhaustion (0→Health drain at 1:1 ratio), percentage-based Stamina regen + Defend boost. Fallen sub-state mechanics with full-tick deferral. Post-combat outcomes handled by [post-combat](post-combat.md). |
 | [traits-and-perks](traits-and-perks.md) | Perks provide Actions, Stat Adjustments, Triggers. Traits unlock resource types. Effect resolution order within Actions: status → damage → movement (overrides simultaneous model). All cooldowns reset per-combat. Perk Discovery changed to per-Trait end-of-combat check (active Traits only) — resolved in [post-combat](post-combat.md). Tag-scoped bonuses: flat or %, additive stacking, flat→% order. Trait/Perk level amplification multipliers shared curve ×1.0/×1.2/×1.4/×1.7/×2.0. Actions with Damage components need a `primary_damage_type` field. `OnDyingBlow` added to Trigger event vocabulary for "Last Stand" style Perks. |
@@ -1084,8 +1257,8 @@ Most original questions are resolved. Remaining items are tuning values and defe
 | [consumables](consumables.md) | Consumables are usable during combat turns (potions, bombs, scrolls). Consumables can provide revival (Revive effect component) and shields (Shield effect component). AI must decide when to use them. |
 | [tournaments](tournaments.md) | Tournament matches are combat instances. Multi-team formats supported with ranked elimination order. Attrition ramp onset and rate are per-event-type (specified in Context Flags). Per-combat cooldown and resource pool resets between rounds. Star-gated entry to manage power gaps. Post-combat phases (injury, discovery, recruitment, loot) handled by [post-combat](post-combat.md). Fight length varies by event type (25–150 ticks). Event templates define starting zone assignments per team. |
 | [meta-balance](../architecture/meta-balance.md) | Combat Scoreboard data (win/loss per character, per Trait, per-character stats, Dying Blows) feeds the automatic underdog balancing system. |
-| [data-model](../architecture/data-model.md) | Must support: hidden system Trait type, effect component typed format (type tag + key-value parameters), target tag vocabulary, Trigger event vocabulary (including OnDyingBlow), per-family Soak values (3 families), universal Penetration, Physical + Magic Defense as derived stats, per-component damage resolution, overkill tracking per Fallen character, Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO ordering), Context Flags schema, attrition ramp state, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking, `primary_damage_type` field on Actions. |
+| [data-model](../architecture/data-model.md) | Must support: hidden system Trait type, effect component typed format (type tag + key-value parameters), target tag vocabulary (including `[Fallen]`), Trigger event vocabulary (including OnDyingBlow), per-family Soak values (3 families), universal Penetration, Physical + Magic Defense as derived stats, per-component damage resolution, overkill tracking per Fallen character, Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO ordering), Context Flags schema, attrition ramp state, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking, `primary_damage_type` field on Actions. **Rounds 14-19**: Summon control capacity Resource Pool per summoner Trait, per-summon control cost field, formula representation (`{base, weights}` + optional `formula_override`), formula modifier `scope` field (list of formula categories), Resistance K values per type, default Attack Stamina cost. |
 
 ---
 
-_Last updated: 2026-02-18 — Rounds 10-13 interrogation: 11 additional decisions. Weapon-type-defined Attack & Damage formulas (no fixed derived stats). Zone adjacency: center + ring topology with Long range across opposite cardinals. Attribute-scaled unarmed combat (Might-based, Blunt). Formula modifier tags for attribute substitution (highest value wins). DoTs bypass Soak (Shields still absorb). Passive detection before each turn. Summons as Ephemeral Combatants (own Initiative, preset AI, die with summoner). Stun prevents Initiative gain (Willpower decay). Context Flags team_sizes list for multi-team. Total: 82 decisions across 13 rounds. Previous: round 9 (24 decisions), round 8 (20 decisions), rounds 1-7 (27 decisions)._
+_Last updated: 2026-02-18 — Rounds 14-19 interrogation: 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save via Dying Blow, summoner revival). Summon control capacity budget (Resource Pool, not per-Perk cap). Mutual elimination = draw. Non-Stamina resource depletion hard-gates Actions. Crit formula: percentage of base (`base × (1 + crit_multiplier)`). Resistance formula: percentage with diminishing returns (`Resistance/(Resistance+K)`), same formula for stacks and damage. Stealth break formula: `damage_taken / (stealth_stacks × K)`. Minimum 1 stack on all status applications. Status decay frozen while Fallen. Fallen Resolution in reverse Initiative order with sequential Triggers. Default Attack costs Stamina; Move/Defend/Search free. Formula representation: weighted list + optional expression. Formula modifier tags scoped per-category. Revive works on any ally (no-op on living); `[Fallen]` target tag for Fallen-only Actions. DoT overkill counts. Total: 100 decisions across 19 rounds. Previous: rounds 10-13 (11 decisions), round 9 (24 decisions), round 8 (20 decisions), rounds 1-7 (27 decisions)._

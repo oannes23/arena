@@ -55,7 +55,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
 | 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | Updated 2026-02-18: Perk Discovery model changed to per-Trait end-of-combat roll (active Traits only). Post-combat references updated to post-combat.md. MVP content examples deferred to implementation. All structural/mechanical questions resolved. |
-| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 10-13 — 11 additional decisions. Weapon-type-defined formulas (no fixed Attack/Damage derived stats), center + ring zone adjacency, unarmed combat (Might-scaled), formula modifier tags (attribute substitution), DoTs bypass Soak, passive detection per turn, summons as Ephemeral Combatants, stun prevents Initiative, Context Flags team_sizes list. 13 rounds total, 82 decisions. |
+| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 14-19 — 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save, summoner revival), summon control capacity budget, mutual elimination draw, non-Stamina resource hard-gating, crit/resistance/stealth formulas resolved, min 1 stack, frozen decay while Fallen, Fallen Resolution in Initiative order, default Attack costs Stamina, formula representation, formula modifier per-category scope, Revive on any ally + `[Fallen]` target tag. 19 rounds total, 100 decisions. |
 | 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟡 | 1 | **NEW** — Split from combat.md. Phased presentation (injury → discovery → recruitment → loot). Injury mechanics (tiered checks, overkill severity). Perk Discovery (per-Trait end-of-combat roll, active Traits only). Recruitment and loot phases are placeholders. |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Updated 2026-02-18: Context Flags reference combat.md for canonical schema. resource_efficiency uses fight phase signal. Previous: Round 2 (14 decisions). Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves. **From combat**: Penetration as valid affix stat (reduces Soak before formula), crit bonus affixes, stealth-tagged effects. |
@@ -129,6 +129,30 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-18: Combat Rounds 14-19 — 18 Additional Decisions
+
+- **Deepened combat spec** with 18 decisions across 6 interrogation rounds. Total decisions: 100 across 19 rounds.
+- **Revival mechanics**: Clean slate on revival (all statuses cleared). Self-save via Dying Blow (self-heal prevents Fallen). Revived summoner's summons stay dead (must re-summon).
+- **Summon Control Capacity**: Budget-based Resource Pool (e.g., "Necro Control" = 0.8×Willpower + 0.2×Charisma). Each summon has a control cost. Summoners maintain summons up to capacity; dying summons free capacity.
+- **Mutual elimination**: Draw — all teams share 1st place. Consistent with same-tick shared rank rule.
+- **Resource depletion**: Only Stamina has Health substitution (Exhaustion). Other resources hard-gate Actions via `resource_gate`.
+- **Formula shapes resolved**:
+  - Crit: `output = base × (1 + crit_multiplier)` — percentage of base (multiplier is tuning value)
+  - Resistance: `value × (1 - Resistance/(Resistance+K))` — percentage with diminishing returns, same formula/K for stacks and damage
+  - Stealth break: `break_chance = damage_taken / (stealth_stacks × K)` — linear ratio
+- **Status effect floor**: Minimum 1 stack always applies regardless of Resistance. Status decay frozen while Fallen.
+- **Fallen Resolution order**: Reverse Initiative order (lowest first). `OnFallen` Triggers fire sequentially.
+- **Default Action costs**: Attack costs small Stamina (tuning value). Move, Defend, Search are free.
+- **Formula representation**: Structured `{base, weights}` for 95% of formulas; optional `formula_override` expression for complex Perks/spells.
+- **Formula modifier scope**: Per-category (attack, damage, defense, healing, etc.) — prevents universal attribute replacement.
+- **Revive targeting**: Revive component works on any ally (no-op on living targets; other components still resolve). New `[Fallen]` target tag for Fallen-only Actions. Enables hybrid heal+revive Actions.
+- **DoT overkill**: Overkill = abs(final_HP) regardless of damage source.
+- Updated specs:
+  - `combat.md` — All 18 decisions integrated: new subsections (Summon Control Capacity, Formula Representation, Resource Depletion Rules), expanded existing sections (Fallen State, Critical Hit, Status Effects, Targeting, Stealth). Open Questions: 3 formula shapes resolved (crit, resistance, stealth break), 5 new tuning values added.
+  - `glossary.md` — 2 new terms (Summon Control Capacity, Fallen Target Tag). 10 updated (Fallen, Resistance, Critical Hit, Sneaking, Status Effect, Ephemeral Combatant, Effect Component, Formula Modifier Tag, Exhaustion, Overkill).
+  - `combat-ai.md` — Revival priority note: Revive Actions can target any ally (hybrid heal+revive AI evaluation).
+  - Downstream flagged: data-model (summon control capacity, formula representation, formula modifier scope, Resistance K values)
 
 ### 2026-02-18: Combat Rounds 10-13 — 11 Additional Decisions
 
@@ -481,4 +505,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-18 — Combat rounds 10-13: 11 additional decisions (82 total). Weapon-type formulas, zone adjacency, unarmed combat, formula modifier tags, DoTs bypass Soak, passive detection, summons, stun, Context Flags team_sizes. Updated combat.md, glossary.md, MASTER.md. Five core specs remain 🟢 Complete; post-combat.md at 🟡._
+_2026-02-18 — Combat rounds 14-19: 18 additional decisions (100 total across 19 rounds). Revival mechanics, summon control capacity, formula shapes resolved (crit, resistance, stealth break), Fallen resolution order, formula representation, default action costs, Revive on any ally + [Fallen] target tag. Updated combat.md, glossary.md, combat-ai.md, MASTER.md. Five core specs remain 🟢 Complete; post-combat.md at 🟡._
