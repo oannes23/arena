@@ -41,7 +41,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | Area | Doc | Status | Notes |
 |------|-----|--------|-------|
 | System Overview | [overview.md](architecture/overview.md) | 🟡 | Philosophy, constraints, non-goals, star rating system |
-| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation: Actions (target tags, effect component list, speed, cooldown, resource costs), Stat Adjustments (two subtypes: flat `{stat_key, value}` and tag-scoped `{tag, stat_key, value, value_type: "flat"|"percentage"}`), Triggers (event type, effect component list). Effect components use generic typed format (type tag + key-value parameters). Prerequisite graph must be acyclic (content validation). **From combat**: Hidden system Trait type (Combatant), Soak/Penetration/Crit as stat categories, tiered injury roll data (two-tier check with overkill factor), overkill tracking per Fallen character, target tag vocabulary, Trigger event vocabulary (24+ event types), effect component type catalog (11+ types with parameters). |
+| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation: Actions (target tags, effect component list, speed, cooldown, resource costs, `primary_damage_type`), Stat Adjustments (two subtypes: flat `{stat_key, value}` and tag-scoped `{tag, stat_key, value, value_type: "flat"|"percentage"}`), Triggers (event type, effect component list). Effect components use generic typed format (type tag + key-value parameters). Prerequisite graph must be acyclic (content validation). **From combat**: Hidden system Trait type (Combatant), per-family Soak values (3 families: Physical/Elemental/Magical), Physical + Magic Defense as derived stats, universal Penetration, per-component damage resolution, tiered injury roll data (two-tier check with overkill factor), overkill tracking per Fallen character, target tag vocabulary, Trigger event vocabulary (25+ event types including OnDyingBlow), effect component type catalog (11+ types with parameters), Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO), Context Flags schema, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking. **From combat rounds 10-13**: Formula modifier tag representation (attribute substitution: `{source_attr, target_attr, formula_scope}`), per-weapon-type Attack/Damage formula definitions (content data, not schema), summon templates (stat blocks, AI configs, duration), `team_sizes: [int]` list in Context Flags schema (replaces `team_size`/`opponent_team_size`). Stat Adjustment now three subtypes (flat, tag-scoped, formula modifier). |
 | Meta-Balance | [meta-balance.md](architecture/meta-balance.md) | 🔴 | **NEW** — Automatic underdog balancing system: win/loss ratio tracking per Trait, automatic bonuses for underperforming Traits/builds. Cross-cutting system affecting combat, tournaments, and economy. **From traits-and-perks**: build diversity philosophy relies on this system as a fourth pillar alongside economic scarcity, content variety, and roster pressure. |
 | MVP Scope | [mvp-scope.md](architecture/mvp-scope.md) | 🟡 | MVP 0 / MVP 1 boundaries, parking lot |
 
@@ -54,15 +54,16 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | # | Area | Doc | Status | Phase | Key Open Questions |
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
-| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | None — MVP content examples deferred to implementation, combat-triggered Trait discovery deferred to later phase, underdog balancing deferred to meta-balance spec. All structural, mechanical, implementation precision, and game design questions resolved through 6 rounds. |
-| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-17: fight length revised from 15–25 to **25–150 ticks** (PvE fodder to championship finals), Combat Context Flags added, sequential team evaluation noted in Turns Phase. 7 rounds of interrogation resolved 27 decisions. Remaining items are tuning values and deferred systems. |
-| 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Round 2: 14 additional decisions. Added Consumable AI (consumable_scarcity Scorer), Combat Context Flags, Judgment-Gated Lookahead (1–10 ticks, future_state_value Scorer), stealth_awareness Scorer, team coordination (sequential evaluation), personality archetype mixing, fight length revised to 25–150 ticks, forward-looking revival model, position_need zone density, content authoring guidelines. Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
+| 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | Updated 2026-02-18: Perk Discovery model changed to per-Trait end-of-combat roll (active Traits only). Post-combat references updated to post-combat.md. MVP content examples deferred to implementation. All structural/mechanical questions resolved. |
+| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 10-13 — 11 additional decisions. Weapon-type-defined formulas (no fixed Attack/Damage derived stats), center + ring zone adjacency, unarmed combat (Might-scaled), formula modifier tags (attribute substitution), DoTs bypass Soak, passive detection per turn, summons as Ephemeral Combatants, stun prevents Initiative, Context Flags team_sizes list. 13 rounds total, 82 decisions. |
+| 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟡 | 1 | **NEW** — Split from combat.md. Phased presentation (injury → discovery → recruitment → loot). Injury mechanics (tiered checks, overkill severity). Perk Discovery (per-Trait end-of-combat roll, active Traits only). Recruitment and loot phases are placeholders. |
+| 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Updated 2026-02-18: Context Flags reference combat.md for canonical schema. resource_efficiency uses fight phase signal. Previous: Round 2 (14 decisions). Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves. **From combat**: Penetration as valid affix stat (reduces Soak before formula), crit bonus affixes, stealth-tagged effects. |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
 | 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services. XP earn rates per fight (per-character). Hiring cost should factor starting Trait count. **From traits-and-perks**: Trainer service fees (gold) for Trait/Perk leveling, respec gold cost formula, XP cost schedule (100/300/600/1000/1500) interactions, Group-specific trainer fee model (specialist vs. generalist pricing differences), XP cost as natural gate for high-star Traits on low-star characters |
 | 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★), one Bond Trait per Group per character, each Group defines exactly one Bond Trait. Note: Bond level no longer has a special Perk Discovery bonus — discovery is driven by Trait Level Multiplier (universal across all categories). |
 | 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations, character dismissal/firing mechanics, Free Agent recruitment, post-battle recruitment flow |
-| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state). **From traits-and-perks**: Star-gated tournament entry to manage power gaps. Per-combat cooldown reset means no cross-fight cooldown attrition. **From combat**: Exhibition events skip injury checks. Non-exhibition events trigger tiered injury rolls with overkill severity. Per-combat resource/cooldown resets between rounds. Post-combat phased presentation per round. **⚠️ Fight length revised to 25–150 ticks** (was 15–25) — tournament pacing assumptions need updating. Championship finals may run ~100–150 ticks. |
+| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state). **From traits-and-perks**: Star-gated tournament entry to manage power gaps. Per-combat cooldown reset means no cross-fight cooldown attrition. **From combat**: Attrition ramp onset/rate per event type. Per-combat resource/cooldown resets between rounds. **From post-combat**: Injury/death, Perk discovery, recruitment, loot handled per round by [post-combat](domains/post-combat.md). **⚠️ Fight length revised to 25–150 ticks** — tournament pacing assumptions need updating. |
 | 11 | Quests | — | 🔴 | 4+ | Future system. Tasks offered by Groups for rewards. Not yet scoped. |
 
 ---
@@ -94,7 +95,11 @@ characters (primitive — depends on nothing)
     │       │       │
     │       │       ├──→ combat-ai (depends on: combat)
     │       │       │
-    │       │       └──→ tournaments (depends on: combat, economy, groups)
+    │       │       ├──→ post-combat (depends on: combat, characters, traits-and-perks)
+    │       │       │       │
+    │       │       │       └──→ tournaments (depends on: combat, post-combat, economy, groups)
+    │       │       │
+    │       │       └──→ tournaments (depends on: combat, post-combat, economy, groups)
     │       │
     │       ├──→ equipment (depends on: characters, traits-and-perks, groups)
     │       │
@@ -104,26 +109,93 @@ characters (primitive — depends on nothing)
     │       │       │
     │       │       └──→ quests (depends on: groups) [future]
     │       │
-    │       └──→ roster-management (depends on: characters, economy, traits-and-perks, groups)
+    │       └──→ roster-management (depends on: characters, economy, traits-and-perks, groups, post-combat)
     │
     ├──→ economy (depends on: characters)
     │       │
     │       ├──→ groups (depends on: characters, traits-and-perks, economy)
     │       │
-    │       ├──→ roster-management (depends on: characters, economy, traits-and-perks, groups)
+    │       ├──→ roster-management (depends on: characters, economy, traits-and-perks, groups, post-combat)
     │       │
-    │       └──→ tournaments (depends on: combat, economy, groups)
+    │       └──→ tournaments (depends on: combat, post-combat, economy, groups)
     │
     └──→ meta-balance (cross-cutting — depends on: combat, traits-and-perks, tournaments)
 ```
 
-**MVP 0 critical path**: characters → traits-and-perks → combat
+**MVP 0 critical path**: characters → traits-and-perks → combat → post-combat
 
 **Recommended interrogation order**: characters → traits-and-perks → combat → combat-ai → equipment → consumables → economy → groups → roster-management → tournaments
 
 ---
 
 ## Recent Changes
+
+### 2026-02-18: Combat Rounds 10-13 — 11 Additional Decisions
+
+- **Deepened combat spec** with 11 decisions across 4 interrogation rounds. Total decisions: 82 across 13 rounds.
+- **Weapon-type-defined formulas**: No fixed "Physical Attack" or "Magic Attack" derived stats. Each weapon type defines its own attribute blend for Attack Value and Damage Value. Spells define their own formulas independently. Daggers use Speed, warhammers use Might, swords use balanced blends.
+- **Zone adjacency**: Center + ring topology. Center adjacent to all 4 cardinals. Ring neighbors: N↔E, E↔S, S↔W, W↔N. Opposite cardinals (N↔S, E↔W) = Long range. Creates meaningful Long range on the default map.
+- **Unarmed combat**: Attribute-scaled baseline (Might-based, Blunt type). Functional but weaker than weapons. Perks can enhance (Monk builds).
+- **Formula modifier tags**: New Stat Adjustment subtype for attribute substitution (e.g., "Intelligent Strikes" — Intellect replaces Accuracy). Highest value wins on conflicts.
+- **DoTs bypass Soak**: DoT damage skips Soak (already gated by Resistance at application). Shields still absorb. Makes Resistance the primary DoT defense.
+- **Passive detection timing**: Before each character's turn in Turns Phase (not once per tick). More granular detection benefits natural team coordination.
+- **Summons**: Ephemeral Combatants with own Initiative, preset AI, team matching summoner. Die when killed or summoner falls. No post-combat phases.
+- **Stun mechanics**: Prevents Initiative gain entirely (0 gain while stacks > 0). Stacks decay by Willpower per tick. Most powerful CC — must be priced accordingly.
+- **Context Flags**: `team_sizes: [int]` list (own team first) replaces `team_size`/`opponent_team_size`. Supports 2+ teams naturally.
+- Updated specs:
+  - `combat.md` — All 11 decisions integrated: new sections (Attack & Damage Formulas, DoT Damage Rules, Passive Detection Timing, Summon Mechanics, Stun Mechanics), zone adjacency details, unarmed combat, formula modifier tags, Context Flags schema update. Implications table updated.
+  - `glossary.md` — 1 new term (Formula Modifier Tag). 6 updated (Zone, Roll-vs-Static Defense, Status Effect, Stat Adjustment, Ephemeral Combatant, Combat Context Flags).
+  - Downstream flagged: data-model (formula modifier representation, summon templates, weapon-type formula definitions)
+
+### 2026-02-18: Combat Round 9 — 24 Additional Decisions
+
+- **Deepened combat spec** with 24 decisions across 8 interrogation sub-rounds. Total decisions: 71 across 9 rounds.
+- **Multi-team support**: 2+ teams of any sizes (free-for-all, asymmetric). Per-team elimination order with ranked placement. Tied elimination = shared rank.
+- **Per-damage-type Soak**: Replaced single Soak with 3 family formulas — Physical Soak (60% Endurance + 25% Might + 15% Speed), Elemental Soak (45% Endurance + 35% Awareness + 20% Luck), Magical Soak (55% Willpower + 25% Intellect + 20% Luck). Per-type bonuses via tag-scoped Stat Adjustments.
+- **Dual Defense**: Physical Defense (40% Speed + 35% Accuracy + 25% Awareness) for physical attacks, Magic Defense for elemental/magical attacks. Actions designate a primary damage type.
+- **Per-component damage resolution**: Each Damage component in an Action resolves through its own Soak + Shield + Resistance calculation independently.
+- **Dying Blows**: Deaths deferred to end of tick. Characters at ≤0 HP can still act — their Actions are "Dying Blows" (tracked, OnDyingBlow trigger). Enables "Last Stand" Perks.
+- **One turn per tick**: Tick is atomic. Excess Initiative carries over. Fast characters act consecutively across ticks.
+- **Starting positions**: Event-type defined via per-team zone lists.
+- **Starting Initiative**: Default 0, with offset modifiers from Perks/affixes/events.
+- **Deterministic simulation**: Seeded PRNG. Same seed + inputs = identical replay.
+- **Combat event stream**: Structured typed events. Combat simulates in full, then presents via summary + logs.
+- **Universal crit**: All effect component types can crit (heals, shields, etc.).
+- **Universal Penetration**: Single stat applied against whichever family Soak is relevant.
+- **Allies skip resistance**: Friendly effects always apply at full strength.
+- **Batch-then-triggers AoE**: All AoE targets resolve simultaneously, then all triggers fire together.
+- **Unified pipeline**: Component-driven branching (no explicit action type flag).
+- **Action-defined damage formulas**: Each Damage component has its own formula field.
+- Updated specs:
+  - `combat.md` — All 24 decisions integrated, new sections (Per-Damage-Type Soak, Dual Defense, Dying Blows, AoE Resolution, Combat Event Stream, Starting Positions/Initiative). Combat pipeline restructured for unified model.
+  - `glossary.md` — 5 new terms (Physical Defense, Physical/Elemental/Magical Soak, Dying Blow, Primary Damage Type, Combat Event Stream). 6 updated (Soak, Penetration, Critical Hit, Resistance, Combat Scoreboard, Tick).
+  - Downstream flagged: characters (4 new derived stats), combat-ai (multi-team targeting, Dying Blow AI), equipment (per-type Soak bonuses), tournaments (multi-team formats)
+
+### 2026-02-18: Combat Round 8 — 20 Additional Decisions + Post-Combat Split
+
+- **Deepened combat spec** with 20 decisions across new mechanics, resolution clarifications, and spec ownership changes. Total decisions: 47 across 8 rounds.
+- **NEW SPEC: post-combat.md** — Post-combat resolution split from combat.md into its own domain spec. Owns: phased presentation flow, injury/death mechanics, Perk Discovery resolution, recruitment phase (placeholder), loot phase (placeholder).
+- **Attrition Ramp**: Anti-stalemate mechanic. After configurable onset tick (~100), stacking global damage bonus (+0.5–1%/tick). Healing unaffected. Per-event-type configuration via Context Flags. No hard tick limit.
+- **Shield Mechanics**: Second defense layer after Soak. Shields have own HP pool, stack (oldest-first drain), optional damage type filter. Penetration doesn't affect shields.
+- **Combat Scoreboard**: Per-character stat tracking (damage dealt/taken/healed, kills, Actions by type, Fallen/revival events, ticks survived). Feeds post-combat and meta-balance.
+- **Fight Phase Signal**: `current_tick / attrition_ramp_onset` ratio for AI fight phase detection and Trigger conditions.
+- **Win Condition**: Elimination only (last team standing). Attrition ramp ensures convergence.
+- **Turn Order**: Explicitly noted as global Initiative interleaving (no team-alternating).
+- **Stamina Regen**: Changed to percentage-based (X% of max pool per tick).
+- **Defend Action**: Fixed % boost to Defense + Soak, plus Y% max Stamina burst.
+- **Exhaustion**: Clarified 1:1 Health cost ratio (no penalty multiplier).
+- **Forced Movement**: Unrestricted by default, fires OnForcedMove triggers, resistance Perks can reduce/prevent.
+- **Zone Effects**: Explicitly deferred to Phase 4.
+- **Context Flags Schema**: Canonical field list moved from combat-ai.md to combat.md. Added attrition ramp parameters.
+- **Perk Discovery Model Change**: Per-Trait end-of-combat roll (not per-Action/Trigger-use). Active Traits only. Formula unchanged but applied per-Trait.
+- Updated specs:
+  - `combat.md` — All 20 decisions integrated, 4 new sections (Attrition Ramp, Shield, Scoreboard, Fight Phase), Post-Combat Flow replaced with handoff reference
+  - `post-combat.md` — **NEW** — Injury mechanics, Perk Discovery, phased presentation
+  - `traits-and-perks.md` — Discovery model updated to per-Trait end-of-combat roll, "active Traits only" rule
+  - `combat-ai.md` — Context Flags references combat.md, resource_efficiency uses fight phase signal
+  - `glossary.md` — 4 new terms (Attrition Ramp, Shield, Combat Scoreboard, Fight Phase Signal), 3 updated (Perk Discovery, Exhaustion, Defend)
+  - `tournaments.md` — Post-combat references updated
+  - `characters.md` — Post-combat references updated
 
 ### 2026-02-17: Combat AI Round 2 — 14 Additional Decisions
 
@@ -409,4 +481,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-17 — Combat AI round 2: 14 additional decisions deepening consumable AI, lookahead, stealth awareness, team coordination, personality mixing, fight length (25–150 ticks). Combat.md updated. Glossary expanded with 5 new terms. All four core specs remain 🟢 Complete._
+_2026-02-18 — Combat rounds 10-13: 11 additional decisions (82 total). Weapon-type formulas, zone adjacency, unarmed combat, formula modifier tags, DoTs bypass Soak, passive detection, summons, stun, Context Flags team_sizes. Updated combat.md, glossary.md, MASTER.md. Five core specs remain 🟢 Complete; post-combat.md at 🟡._

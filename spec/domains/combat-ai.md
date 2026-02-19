@@ -94,7 +94,7 @@ Reusable Consideration types that Perk Actions reference by name. Content author
 
 | Scorer | Track | Evaluates |
 |--------|-------|-----------|
-| `resource_efficiency` | Tactical | Cost relative to remaining pool, fight phase (early = conserve, late = spend), and regen rate. For multi-resource costs, evaluates each pool independently and takes the **minimum** score (bottleneck pool dominates). |
+| `resource_efficiency` | Tactical | Cost relative to remaining pool, fight phase via [fight phase signal](combat.md#fight-phase-signal) (early = conserve, late = spend), and regen rate. For multi-resource costs, evaluates each pool independently and takes the **minimum** score (bottleneck pool dominates). |
 | `damage_output` | Tactical | Estimated damage vs target defenses (Soak, Defense Value, damage type resistances). Higher when the Action deals more effective damage. |
 | `healing_urgency` | Tactical | How badly do allies (or self) need healing? Scales with missing HP across valid heal targets. Near-zero when all allies are healthy. |
 | `aoe_clustering` | Tactical | Net value of targets in AoE zone. Σ(enemy value) − Σ(ally penalty × 1.5–2.0× weight). Negative-net zones score ~0.05 (naturally deprioritized but not vetoed). |
@@ -386,26 +386,14 @@ Player-configured **consumable triggers** (Phase 2+) map to Gate overrides on co
 
 At fight start, the combat system passes an explicit **context flags** object to the AI system. Any Scorer can query these flags to adjust behavior based on fight circumstances.
 
-```
-combat_context: {
-  is_tournament: bool,
-  round: int,              // current round (1-indexed)
-  total_rounds: int,       // total rounds in this event
-  consumables_replenish: bool,  // do consumables reset between rounds?
-  is_exhibition: bool,
-  pve_tier: int | null,    // null if not PvE
-  team_size: int,
-  opponent_team_size: int,
-  ...                      // extensible for future flags
-}
-```
+The canonical context flags schema is defined in [combat.md](combat.md#combat-context-flags). Key fields include: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_size`, `opponent_team_size`, `attrition_ramp_onset`, `attrition_ramp_rate`. The schema is extensible.
 
 **Usage examples**:
 - `consumable_scarcity` checks `is_tournament`, `round`, `total_rounds`, and `consumables_replenish` to decide conservation strategy
-- `resource_efficiency` can adjust early/late phase thresholds based on fight context
+- `resource_efficiency` uses the **fight phase signal** (`current_tick / attrition_ramp_onset`) for fight phase detection: conserve resources early (< 0.5), balanced mid-fight (0.5–0.8), spend freely late (> 0.8). The `attrition_ramp_onset` from Context Flags serves as `estimated_max_ticks`.
 - Future Scorers can use `pve_tier` to adjust risk tolerance (low-tier PvE = more aggressive, high-tier = more conservative)
 
-Context flags are defined by the combat system (see [combat.md](combat.md)), not by the AI spec. The AI spec only defines that Scorers can read them.
+Context flags are defined by the combat system (see [combat.md](combat.md#combat-context-flags)), not by the AI spec. The AI spec only defines that Scorers can read them.
 
 ---
 
@@ -581,7 +569,7 @@ All design questions are resolved. Remaining items are tuning values:
 5. **Personality archetype weights**: Default influence strength per archetype. How strongly does "Aggressive" bias toward offensive Actions?
 6. **Anti-repetition penalty**: Exact multiplier (~0.85× is the starting point). May vary by Action type (spamming the same AoE might be worse than repeating a basic Attack).
 7. **AoE ally penalty weight**: Exact multiplier (1.5–2.0× range) for ally presence in AoE zones.
-8. **Fight phase detection**: How does `resource_efficiency` determine "early" vs "late" fight? Tick count thresholds, team HP ratios, or combination?
+8. **Fight phase detection**: `resource_efficiency` uses the fight phase signal (`current_tick / attrition_ramp_onset`) from [combat.md](combat.md#fight-phase-signal). Remaining tuning: exact threshold breakpoints for conservation strategy shifts (conserve < 0.5, balanced 0.5–0.8, spend > 0.8 are starting points).
 9. **Consumable scarcity thresholds**: Exact scoring curves for the `consumable_scarcity` Scorer — how remaining uses, impact assessment, and tournament round factor into the penalty.
 10. **Stealth awareness parameters**: Scoring weights for `stealth_awareness` — how much does AoE get boosted vs. single-target deprioritized when stealth enemies exist? At what threshold does Search become worthwhile?
 11. **Zone density weights**: How strongly does zone density (ally/enemy count per zone) factor into `position_need` relative to range-gap evaluation?
@@ -603,4 +591,4 @@ All design questions are resolved. Remaining items are tuning values:
 
 ---
 
-_Last updated: 2026-02-17 — Round 2 interrogation: 14 additional decisions. Added Consumable AI (consumable_scarcity Scorer, standard pipeline, tournament-aware conservation), Combat Context Flags (explicit context passed to AI), Judgment-Gated Lookahead (1–10 ticks prediction depth, future_state_value Scorer, Effects Phase + Initiative timing projection), stealth_awareness Scorer, team coordination (sequential evaluation with state updates), personality archetype mixing (all contribute equally, contradictory = internally conflicted), fight length revised to 25–150 ticks, revival_priority updated to forward-looking remaining potential model, position_need updated with zone density, content authoring performance guidelines. Standard library expanded to 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Previous: Full rewrite replacing priority-list model with Utility AI system._
+_Last updated: 2026-02-18 — Context Flags section updated to reference combat.md for canonical schema (combat.md now owns the field list). resource_efficiency Scorer now uses fight phase signal (current_tick / attrition_ramp_onset) for phase detection. Previous: 2026-02-17 Round 2 interrogation (14 additional decisions). Full rewrite replacing priority-list model with Utility AI system._

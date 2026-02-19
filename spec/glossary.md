@@ -78,7 +78,7 @@ A tracked attribute bonus from Perks, Equipment, or Status Effects. Separate fro
 The value used in all derived stat formulas: base Current + all Bonus Modifiers (from Perks, Equipment, Status Effects). Not capped by Potential — Potential only gates training. Hard ceiling is the scale max (200).
 
 ### Exhaustion (0 Stamina)
-When Stamina reaches 0, physical actions cost Health instead. A last-stand mechanic that creates dramatic late-fight moments without completely disabling the character.
+When Stamina reaches 0, physical Actions cost Health at a **1:1 ratio** (no penalty multiplier). A 30-Stamina Action costs 30 Health instead. A last-stand mechanic that creates dramatic late-fight moments without completely disabling the character.
 
 ### Fallen
 In-Combat sub-state. A character whose HP dropped below 1 during combat. Out of the fight for its remainder. Post-combat fate depends on event type: exhibitions recover normally (no injury risk), non-exhibition fights trigger an injury/death roll after combat resolves (outcomes: Available, Recovering, or Dead). See [characters.md](domains/characters.md) for the full state machine.
@@ -96,7 +96,7 @@ A derived stat. Resistance to magical attacks. 60% Willpower + 25% Awareness + 1
 A body location where equipment can be worn (Head, Torso, Hands, etc.). Slot availability varies by ancestry/biology. Distinct from Equipment Slot (the 5-item limit).
 
 ### Ephemeral Combatant
-An unnamed battle opponent generated for a specific combat encounter (e.g., "5× 1★ Bandits"). Uses the same attribute and derived stat model as Characters but is not persistent — ceases to exist after combat resolves. No state machine, identity fields, or career tracking.
+An unnamed battle entity generated for a specific combat encounter (e.g., "5× 1★ Bandits") or created mid-combat by the Summon effect component. Uses the same attribute and derived stat model as Characters but is not persistent — ceases to exist after combat resolves. No state machine, identity fields, or career tracking. Summoned Ephemeral Combatants have their own Initiative, preset AI, and team membership matching the summoner; they disappear when killed or when the summoner enters Fallen. They do not trigger post-combat phases (injury, discovery, recruitment).
 
 ### Named NPC
 A persistent non-player Character entity tracked identically to player-owned characters — same attributes, state machine, identity, career history, and Trait slots. Generated via post-battle recruitment mechanics or as Group members. Can be recruited by players, become Free Agents, or serve in Groups.
@@ -140,7 +140,7 @@ The atomic unit of character capability, unlocked by owning a parent Trait. A mu
 An active combat ability granted by a Perk. Used on the character's turn during combat. Has an Action Speed, optional cooldown, optional resource cost, and tag-based targeting (e.g., `[Enemy, Single]`, `[Ally, AoE-Zone]`). All cooldowns reset fully between fights (per-combat only — no cross-fight persistence). Outputs are expressed as an effect component list — an ordered list of typed effect components (Damage, Heal, ApplyStatus, etc.) that resolve simultaneously. See [traits-and-perks.md](domains/traits-and-perks.md) for the full model.
 
 ### Stat Adjustment (Perk Component)
-A permanent bonus applied while the Perk is owned. Passive — always active. Two subtypes: **flat bonuses** (direct numeric bonus to any stat — Attributes, derived stats, resource pools, crit chance, etc.) and **tag-scoped bonuses** (conditional bonus when a matching tag is present — can be flat or percentage, e.g., "+5 Soak vs [Poison]" or "+10% damage to [Fire] Actions"). Multiple percentage bonuses on the same stat/tag stack additively. Application order: flat bonuses first, then combined percentage as a single multiplier on the already-level-scaled value.
+A permanent bonus applied while the Perk is owned. Passive — always active. Three subtypes: **flat bonuses** (direct numeric bonus to any stat — Attributes, derived stats, resource pools, crit chance, etc.), **tag-scoped bonuses** (conditional bonus when a matching tag is present — can be flat or percentage, e.g., "+5 Soak vs [Poison]" or "+10% damage to [Fire] Actions"), and **formula modifier tags** (attribute substitution in formula evaluation, e.g., "use Intellect instead of Accuracy in Attack formulas" — highest value wins on conflict). Multiple percentage bonuses on the same stat/tag stack additively. Application order: flat bonuses first, then combined percentage as a single multiplier on the already-level-scaled value.
 
 ### Trigger (Perk Component)
 A conditional automatic effect from a Perk that fires when specific combat events occur (e.g., OnHit, OnHitBy, OnAllyFallen, OnTurnStart). Not activated by the player or AI — resolves automatically. Uses the same effect component list as Actions for its outputs. The canonical Trigger event vocabulary is owned by the combat spec.
@@ -158,7 +158,7 @@ An expensive vendor service (from a Group) to remove an entire Trait from a char
 The designated Perk auto-granted (free, no XP cost) when a Trait is acquired. Every Trait has exactly one Starter Perk — it defines the Trait's basic capability and ensures immediate usefulness.
 
 ### Perk Discovery
-A rare chance (~0.1% base rate) when using a Perk's Action or when a Perk's Trigger fires in combat to discover a random unowned Perk from the same Trait's tree. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier` — where Trait Level Multiplier uses the standard amplification curve (×1.0/×1.2/×1.4/×1.7/×2.0). No hard rate cap — small tree size (2-4 discoverable Perks) is the natural limit. Discovery rolls are collected during combat but **resolved post-combat** (alongside injury checks, NPC recruitment, loot). The player can **accept or reject** each discovered Perk; rejected Perks remain in the pool for future rolls. Accepted Perks are acquired at minimum star level, free of XP cost, and override the Perk level cap at acquisition (further leveling capped by Trait level). Rarity-weighted (lower-minimum-star more likely). Passive Stat Adjustments do not trigger discovery. Full tree = silently wasted roll.
+A rare end-of-combat mechanic. At the end of combat, each **active Trait** (Traits that had at least one Action used or Trigger fire) gets a single discovery roll to find a random unowned Perk from that Trait's tree. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier` — where Trait Level Multiplier uses the standard amplification curve (×1.0/×1.2/×1.4/×1.7/×2.0). One roll per qualifying Trait, not per-use. No hard rate cap — small tree size (2-4 discoverable Perks) is the natural limit. **Resolved in [post-combat](domains/post-combat.md)**: the player can **accept or reject** each discovered Perk; rejected Perks remain in the pool for future rolls. Accepted Perks are acquired at minimum star level, free of XP cost, and override the Perk level cap at acquisition (further leveling capped by Trait level). Rarity-weighted (lower-minimum-star more likely). Traits with only passive Stat Adjustments active do not qualify. Full tree = silently skipped.
 
 ### Resource Pool
 A non-universal resource granted to characters through Perk content. A resource pool activates when a character first owns a Perk that references it (costs it or grants pool capacity). The attribute-derived formula provides the base pool size; Perk Stat Adjustments add bonus capacity **pre-multiplier** (bonus capacity adds to the weighted attribute blend before the per-stat scaling multiplier is applied, meaning it is amplified by the multiplier). Five default resource types ship (Mana, Faith, Spirit, Focus, Stamina); content authors can define additional types. Resource pool ownership is emergent from Perk content, not a Trait-level property — a single Trait can have Perks referencing multiple resource types. See [traits-and-perks.md](domains/traits-and-perks.md).
@@ -183,7 +183,7 @@ A generation parameter on an archetype's Trait loot table. A stacking percentage
 ## Combat
 
 ### Zone
-A spatial region on the battlefield. Default map: 5 zones (North, South, East, West, Center). Characters occupy a zone and can interact with others based on range.
+A spatial region on the battlefield. Default map: 5 zones (North, South, East, West, Center) with center + ring adjacency. Center is adjacent to all four cardinals. Cardinals are adjacent to ring neighbors (N↔E, E↔S, S↔W, W↔N). Opposite cardinals (N↔S, E↔W) are NOT adjacent = Long range. Characters occupy a zone and can interact with others based on range.
 
 ### Range
 Distance classification between zones. **Short**: same zone (melee). **Medium**: adjacent zones. **Long**: non-adjacent zones.
@@ -192,7 +192,7 @@ Distance classification between zones. **Short**: same zone (melee). **Medium**:
 A meter that accumulates per tick based on Speed. Each tick, characters add `sqrt(Speed) × global_initiative_multiplier` to their meter. When Initiative ≥ 100, the character takes a turn. After acting, Initiative is reduced by `100 - Action Speed modifier`. Haste/Slow effects use two channels: Speed modification (permanent, affects sqrt calculation) and Initiative gain modification (temporary multiplier).
 
 ### Tick (Combat)
-A single time step in combat resolution. Each tick resolves in fixed order: (1) Effects Phase — per-tick status effects resolve (DoTs, decay, regen); (2) Initiative Phase — all characters accumulate Initiative; (3) Turns Phase — characters with Initiative ≥ 100 act. See [combat.md](domains/combat.md) for full tick resolution order.
+A single time step in combat resolution — the atomic time unit. Each tick resolves in fixed order: (1) Effects Phase — per-tick status effects resolve (DoTs, decay, regen); (2) Initiative Phase — all characters accumulate Initiative; (3) Turns Phase — characters with Initiative ≥ 100 act (one turn per tick maximum); (4) Fallen Resolution — characters at ≤0 HP enter Fallen state. Deaths from any source are deferred to end of tick. See [combat.md](domains/combat.md) for full tick resolution order.
 
 ### Global Initiative Multiplier
 A per-combat tuning value (default ~3.0) applied to Initiative gain each tick. Controls match pacing without affecting relative character balance. Higher = more turns per tick = faster combat.
@@ -201,22 +201,37 @@ A per-combat tuning value (default ~3.0) applied to Initiative gain each tick. C
 A flat modifier to the base −100 Initiative cost after acting. Positive values = faster recovery (Action Speed +30 → only −70 Initiative cost). Negative values = longer delay (Action Speed −40 → −140 Initiative cost). Default Actions (Attack, Defend, Move, Search) have Action Speed 0.
 
 ### Roll-vs-Static Defense
-The combat resolution model. Attacker rolls 1 to [Attack Value]; defender's Defense is subtracted as a flat threshold. Negative result = miss. Non-negative result = hit bonus that carries into the damage step.
+The combat resolution model. Attacker rolls 1 to [Attack Value]; defender's Defense is subtracted as a flat threshold. Uses **dual Defense**: Physical Defense for physical attacks (Blunt, Piercing, Slashing), Magic Defense for elemental and magical attacks. The Action's primary damage type determines which Defense is checked. Negative result = miss. Non-negative result = hit bonus that carries into the damage step. Attack Value and Damage Value are weapon-type-defined — each weapon type has its own attribute blend formula (no fixed derived stats). Unarmed attacks use Might-scaled Blunt damage as a baseline.
+
+### Formula Modifier Tag
+A Stat Adjustment subtype that substitutes one attribute for another in formula evaluation (e.g., "Intelligent Strikes" lets Intellect replace Accuracy in Attack formulas). When multiple modifiers target the same formula slot, the **highest attribute value wins** — the player always benefits from their best option. Enables build diversity without creating new Action variants.
+
+### Physical Defense
+A derived combat stat. 40% Speed + 35% Accuracy + 25% Awareness (× scaling multiplier). Represents dodge, evasion, and reading physical attacks. Used as the Defense threshold for Actions with a physical primary damage type (Blunt, Piercing, Slashing).
 
 ### Soak
-Damage reduction stat used in the damage step. Uses percentage-based diminishing returns: `Reduction % = Soak / (Soak + K)` where K is a global tuning constant. Higher Soak is always valuable but never grants immunity. Penetration reduces effective Soak before the formula: `Effective Soak = Soak - Penetration` (minimum 0).
+Per-damage-type damage reduction stat used in the damage step. Uses **three family-level base formulas**: Physical Soak (60% Endurance + 25% Might + 15% Speed), Elemental Soak (45% Endurance + 35% Awareness + 20% Luck), Magical Soak (55% Willpower + 25% Intellect + 20% Luck). Each damage type uses its family's Soak value. Formula: `Reduction % = Soak[family] / (Soak[family] + K)` where K is a global tuning constant. Per-type bonuses via tag-scoped Stat Adjustments (e.g., "+5 Soak vs [Fire]") add to the family base for specific types. Penetration reduces effective Soak before the formula: `Effective Soak = Soak[family] - Penetration` (minimum 0).
+
+### Physical Soak
+Family Soak derived stat for Blunt, Piercing, and Slashing damage. 60% Endurance + 25% Might + 15% Speed (× scaling multiplier).
+
+### Elemental Soak
+Family Soak derived stat for Fire, Cold, and Lightning damage. 45% Endurance + 35% Awareness + 20% Luck (× scaling multiplier).
+
+### Magical Soak
+Family Soak derived stat for Poison, Shadow, Light, and Psychic damage. 55% Willpower + 25% Intellect + 20% Luck (× scaling multiplier).
 
 ### Penetration
-A stat (from Perks or equipment affixes) that reduces the defender's effective Soak before the diminishing returns formula is applied. Creates a meaningful counter-stat to Soak stacking.
+A universal stat (from Perks or equipment affixes) that reduces the defender's effective Soak (for whichever family applies) before the diminishing returns formula: `Effective Soak = Soak[family] - Penetration` (minimum 0). One value — applies against all damage families equally. Does NOT affect Shields. Creates a meaningful counter-stat to Soak stacking.
 
 ### Critical Hit
-An extra damage roll triggered after a successful hit. Chance derived from Physical Crit (40% Awareness + 35% Luck + 25% Accuracy) or Magic Crit (40% Awareness + 35% Luck + 25% Intellect). Adds bonus damage to the damage pool, not a multiplier.
+A bonus triggered after a successful hit (or when any Action resolves). Chance derived from Physical Crit (40% Awareness + 35% Luck + 25% Accuracy) or Magic Crit (40% Awareness + 35% Luck + 25% Intellect), based on the Action's primary damage type. **Universal**: crits apply to ALL effect component types — crit damage hits harder, crit heals heal more, crit shields are stronger. Adds a bonus to each component's output, not a multiplier.
 
 ### Rider Effect
 A modular effect (from a Perk or equipment affix) that triggers as part of the status/rider application step (Step 3 of the combat pipeline — before the damage step). Each rider has its own resolution. Examples: Stunning Blow, Flaming Sword proc, Armor Shred.
 
 ### Status Effect
-A temporary condition applied to a character, tracked as stacks with a decay model. Unified system for buffs, debuffs, DoTs, and crowd control. Max stacks effectively unlimited (9999 cap).
+A temporary condition applied to a character, tracked as stacks with a decay model. Unified system for buffs, debuffs, DoTs, and crowd control. Max stacks effectively unlimited (9999 cap). DoT damage bypasses Soak (already gated by Resistance at application) but Shields still absorb it. Stun prevents Initiative gain entirely (0 gain while stacks > 0); stacks decay proportionally to Willpower per tick.
 
 ### Sneaking
 A status that prevents a character from being targeted by single-target or selected-target enemy abilities. AoE effects hit Sneaking characters. Break conditions: using a non-stealth-tagged Action, taking damage (chance-based vs. stealth stacks). Stealth-tagged Actions can be used without breaking Sneaking. Detection (passive or active) allows targeting but does not remove the status. Implemented within the standard stack-based status system.
@@ -228,7 +243,7 @@ A default Action (via the Combatant system Trait) for active stealth detection. 
 A fighter stat affected by combat events (ally death, kills, heavy damage). May cause debuffs, fleeing, or bonuses. Full design TBD (Phase 4).
 
 ### Defend
-A default Action (via the Combatant system Trait) available to all characters. Increases defensive stats temporarily until the character's next turn and provides a Stamina recovery burst.
+A default Action (via the Combatant system Trait) available to all characters. Provides a **fixed percentage boost** to Defense and Soak until the character's next turn, plus a Stamina recovery burst equal to **Y% of max Stamina pool** (tuning value). Both the defensive boost percentages and Stamina burst percentage are tuning values.
 
 ### Damage Type
 A classification for damage. 10 types in three families: Physical (Blunt, Piercing, Slashing), Elemental (Fire, Cold, Lightning), Magical (Poison, Shadow, Light, Psychic). No inherent rock-paper-scissors — differences come from affiliated status effects and Perk/equipment interactions.
@@ -246,7 +261,7 @@ The amount of excess damage dealt beyond 0 HP when a character is reduced to Fal
 A tiered post-combat roll for Fallen characters in non-exhibition events. Tier 1 determines if an injury occurs (modified by overkill, Endurance, Luck, Perks). Tier 2 determines severity: minor (temporary penalty), major (significant penalty), critical (permanent Potential reduction or slot loss), or death. Exhibition events skip injury checks entirely.
 
 ### Resistance (Combat)
-A per-damage/status-type defensive value. Status effects always apply (no binary resist roll). Resistance provides dual reduction: reduces the number of status stacks applied AND reduces damage of that type. Sources: Attributes, Perks, equipment, status effects.
+A per-damage/status-type defensive value. Status effects always apply (no binary resist roll). Resistance provides dual reduction: reduces the number of status stacks applied AND reduces damage of that type. **Enemy-sourced only**: resistance applies only to effects from enemy sources — friendly buffs and heals always apply at full strength. Sources: Attributes, Perks, equipment, status effects.
 
 ### Judgment
 A derived combat stat. 40% Awareness + 35% Willpower + 25% Intellect (× scaling multiplier). Controls AI decision quality via three parameters: tactical-vs-personality blend (how much the character weighs objective effectiveness vs personality impulses, range ~0.3 to ~0.95), selection sharpness (how reliably the character picks the top-scoring Action, range ~1 to ~10), and lookahead depth (how many ticks ahead the character can project deterministic events, range 1 to 10). Modified by Star Rating, Perks, equipment affixes, and status effects. High Judgment = near-optimal play with strategic foresight; low Judgment = personality-driven, impulsive behavior with minimal prediction.
@@ -279,7 +294,19 @@ A function that maps raw game-state values to the 0.01–1.0 output range for Sc
 A content-level tag on Core Traits that represents a character's temperament. Feeds the combat AI's Personality Score track. Five standard archetypes: Aggressive, Cautious, Protective, Vindictive, Showoff. A character can have multiple archetypes from multiple Core Traits — all contribute equally, and contradictory archetypes create internally conflicted characters. New archetypes can be added by extending the vocabulary.
 
 ### Combat Context Flags
-An explicit metadata object passed from the combat system to the AI system at fight start. Contains fight circumstances: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_size`, `opponent_team_size`, etc. Any AI Scorer can query these flags to adjust behavior based on context (e.g., consumable conservation in tournaments, risk tolerance in PvE). Defined by the combat system; consumed read-only by the AI. See [combat-ai](domains/combat-ai.md).
+An explicit metadata object passed from the combat system to the AI system at fight start. Contains fight circumstances: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_sizes: [int]` (list of team sizes, own team first), etc. Any AI Scorer can query these flags to adjust behavior based on context (e.g., consumable conservation in tournaments, risk tolerance in PvE). Defined by the combat system; consumed read-only by the AI. See [combat-ai](domains/combat-ai.md).
+
+### Attrition Ramp
+An anti-stalemate combat mechanic. After a configurable onset tick (~100), a stacking global damage bonus (+0.5–1% per tick) applies to all combatants. Healing is unaffected. Onset tick and escalation rate are per-event-type, specified in [Combat Context Flags](domains/combat.md#combat-context-flags). No hard tick limit — the exponentially increasing damage makes extended fights increasingly lethal. The onset tick also serves as `estimated_max_ticks` for the Fight Phase Signal.
+
+### Shield (Combat)
+A damage absorption layer applied after Soak reduction in the combat pipeline. Each Shield instance has its own HP pool, optional duration, and optional damage type filter. Multiple shields stack — damage drains the **oldest shield first** (FIFO). Penetration does NOT affect shields (only reduces Soak). When a shield's HP reaches 0, remaining damage carries through to the next shield or Health. Created by Perks, equipment, and consumables via the Shield effect component type.
+
+### Combat Scoreboard
+Structured per-character stat tracking during combat. Records: damage dealt/taken/healed, kills, Actions used (by type), Fallen events, revival events, Dying Blows, ticks survived. Available to the [post-combat](domains/post-combat.md) system for Perk Discovery eligibility (determining "active Traits") and to [meta-balance](architecture/meta-balance.md) for win/loss tracking. Does not affect combat mechanics.
+
+### Fight Phase Signal
+A normalized ratio (`current_tick / estimated_max_ticks`) exposed to the AI system and Triggers during combat, where `estimated_max_ticks` = the attrition ramp onset tick from [Context Flags](domains/combat.md#combat-context-flags). Values < 1.0 indicate normal combat; ≥ 1.0 indicates the attrition phase is active. Used by the `resource_efficiency` Scorer for conservation strategy and available to Triggers for phase-dependent effects.
 
 ### Consumable Scarcity
 An AI Tactical Scorer (`consumable_scarcity`) that manages limited-use consumable conservation. Penalizes consumable usage unless the situation warrants it, scaling with remaining uses (fewer left = higher bar), impact threshold (must be impactful to score high), and tournament awareness (conserve across rounds when consumables don't replenish). Part of the standard Scorer library. See [combat-ai](domains/combat-ai.md).
@@ -292,6 +319,15 @@ An AI Tactical Scorer (`future_state_value`) that implements Judgment-gated look
 
 ### Lookahead Depth
 The number of ticks ahead a character's AI can project deterministic game-state events. Controlled by the Judgment stat: range 1 tick (low Judgment) to 10 ticks (high Judgment). Projects Effects Phase outcomes (DoTs, regen, buff/debuff expiry) and Initiative timing (when characters will act). Does NOT include threat estimation (guessing enemy Actions) or probability projection. With fights lasting 25–150 ticks, 10-tick lookahead represents ~7–40% of a fight. See [combat-ai](domains/combat-ai.md).
+
+### Dying Blow
+An Action taken by a character while at ≤0 HP, before end-of-tick Fallen resolution. Because deaths are deferred to the end of each tick, a character reduced below 0 HP by another character's Action can still take their turn — this final action is a Dying Blow. Tracked in the Combat Scoreboard. Available as the `OnDyingBlow` Trigger event type, enabling Perks like "Last Stand" (+100% damage on Dying Blows).
+
+### Primary Damage Type
+A field on Actions with Damage components that designates which damage type determines the Defense check (Physical Defense vs Magic Defense) in Step 1 of the combat pipeline. All Damage components in the Action share the single hit/miss result from the primary type's Defense check. Content authors set the primary type to match the Action's theme.
+
+### Combat Event Stream
+A stream of structured typed events emitted by the combat engine during simulation. Events include AttackEvent, DamageEvent, FallenEvent, MovementEvent, HealEvent, StatusEvent, DyingBlowEvent, etc. Combat simulates the entire fight to completion (deterministic with seeded PRNG), then the TUI presents results via dramatized summary and/or detailed event logs. The event stream is the authoritative combat record, enabling replays, statistics, and flexible presentation.
 
 ### Resource
 A pool spent to use certain Actions. Default resources (all characters): Health, Stamina. Trait-defined resources belong to five default types: Mana (Arcane), Faith (Divine), Spirit (Primal), Focus (Psychic), plus content-author-defined types. See Resource Pool in Traits & Perks section.
@@ -405,4 +441,4 @@ A future system for facility upgrades (barracks, training grounds, infirmary, fo
 
 ---
 
-_Last updated: 2026-02-17 — Combat AI round 2: added Combat Context Flags, Consumable Scarcity, Stealth Awareness (AI), Future State Value, Lookahead Depth. Updated Judgment (three parameters: blend, sharpness, lookahead depth) and Personality Archetype (clarified equal contribution and contradictory archetypes). Previous: Combat AI Utility AI system terms. 2026-02-16 combat interrogation updates._
+_Last updated: 2026-02-18 — Combat rounds 10-13: added Formula Modifier Tag. Updated Zone (center + ring adjacency, Long range across opposites), Roll-vs-Static Defense (weapon-type-defined formulas, unarmed), Status Effect (DoTs bypass Soak, Stun prevents Initiative), Stat Adjustment (formula modifier subtype), Ephemeral Combatant (summon mechanics), Combat Context Flags (team_sizes list). Previous: round 9 (Physical Defense, Soak families, Dying Blow, Primary Damage Type, Combat Event Stream). 2026-02-17 combat AI round 2 terms. 2026-02-16 combat interrogation updates._

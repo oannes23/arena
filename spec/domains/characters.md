@@ -208,7 +208,7 @@ Dead → Recovering             (cheaper Raise Dead tier — returns with injuri
 - **Fallen**: When a character's HP drops below 1 during combat, they enter the Fallen sub-state and are out of the fight for its remainder. Post-combat fate depends on event type:
   - **Exhibition**: Fallen characters recover normally → Available (no injury risk).
   - **Non-exhibition (real fights)**: Fallen characters receive an injury/death roll **after combat resolves** (not at the moment of Fall). Outcomes: no injury → Available, injury sustained → Recovering, death → Dead.
-- Whether mid-combat revival of Fallen characters is possible → deferred to [combat](combat.md) spec.
+- Mid-combat revival of Fallen characters is possible via Perks, consumables, or rare equipment effects — see [combat](combat.md) for mechanics.
 
 **Extensibility**: In-Combat may gain additional sub-states in later phases (e.g., Stunned, Fleeing) as combat complexity grows. These would be combat-internal states, not top-level character states.
 
@@ -462,8 +462,8 @@ All character-domain design questions are resolved. The following tuning values 
 - **Activity restrictions while Recovering** → deferred to [roster-management](roster-management.md) spec
 - **Training Speed formula** → deferred to [economy](economy.md) spec
 - **Per-stat derived stat scaling multipliers** → deferred to [combat](combat.md) spec
-- **Fallen revival rules (mid-combat)** → deferred to [combat](combat.md) spec
-- **Injury/death roll mechanics and tables** → deferred to [combat](combat.md) spec
+- **Fallen revival rules (mid-combat)** → resolved in [combat](combat.md) spec (Perks, consumables, rare equipment)
+- **Injury/death roll mechanics and tables** → deferred to [post-combat](post-combat.md) spec
 
 ---
 
@@ -472,7 +472,8 @@ All character-domain design questions are resolved. The following tuning values 
 | Spec | Implication |
 |------|-------------|
 | [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. Trait generation loot table weights per archetype (weighted pool for Core/Role/Bond rolls at character generation). |
-| [combat](combat.md) | 16 derived stat formulas with locked weight ratios (including Judgment for AI quality). Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain). Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival?). Injury/death roll mechanics for non-exhibition Fallen characters. Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC from defeated enemy archetype). |
+| [combat](combat.md) | 16 derived stat formulas with locked weight ratios (including Judgment for AI quality). Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain at 1:1 ratio). Percentage-based Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival via Perks/consumables — resolved). Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). |
+| [post-combat](post-combat.md) | Injury/death roll mechanics for non-exhibition Fallen characters. Perk Discovery resolution (per-Trait end-of-combat roll, accept/reject). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC). Loot distribution. |
 | [equipment](equipment.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
 | [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. XP earn rates per fight (per-character XP). Character hiring cost should factor starting Trait count. |
 | [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. Group NPC membership effects (vendor inventories, loot table generation, trainer availability). Free Agent pool (persistent Named NPCs not attached to any Group, recruitable by players). Each recruiting Group must have a Bond Trait (guaranteed at generation). |
@@ -482,4 +483,4 @@ All character-domain design questions are resolved. The following tuning values 
 
 ---
 
-_Last updated: 2026-02-14 — Round 6 final gap sweep (inventory slots, trait generation loot table, XP ownership)_
+_Last updated: 2026-02-18 — Fallen revival marked resolved (combat spec). Post-combat references updated to post-combat.md. Injury/death deferred to post-combat.md. Previous: 2026-02-14 round 6 final gap sweep._

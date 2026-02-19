@@ -1,7 +1,7 @@
 # Traits and Perks — Domain Specification
 
-**Status**: 🟢 Complete
-**Last interrogated**: 2026-02-16
+**Status**: 🟢 Complete (updated 2026-02-18: Perk Discovery model changed to per-Trait end-of-combat roll)
+**Last interrogated**: 2026-02-18
 **Last verified**: —
 **Depends on**: [characters](characters.md)
 **Depended on by**: [combat](combat.md), [equipment](equipment.md), [consumables](consumables.md), [groups](groups.md), [roster-management](roster-management.md)
@@ -217,32 +217,37 @@ When a character is generated at recruitment, their starting Traits are determin
 
 ## Perk Discovery
 
-A rare mechanic that rewards continued use of existing Perks.
+A rare mechanic that rewards active use of Traits in combat.
 
-### Discovery Rolls (During Combat)
+### Discovery Model — Per-Trait End-of-Combat Roll
 
-- **Trigger conditions**: Discovery triggers on **Actions** (when actively used) and **Triggers** (when they fire). Passive Stat Adjustments do not trigger discovery rolls.
-- When a qualifying Perk component fires in combat, there is a ~0.1% base chance to trigger a discovery event for the parent Trait's tree.
-- **Rarity weighting**: The discovery roll is weighted by rarity — lower-minimum-star Perks are more likely to be discovered than higher-minimum-star ones.
-- Discovery is per-qualifying-component-use, so characters who use many Actions and have many Triggers have more chances.
-- **Full tree**: If all Perks in the Trait's tree are already owned, the discovery roll is silently wasted.
+- **Timing**: Discovery is checked once per qualifying Trait at the **end of combat**, not during combat. This is a single roll per Trait, not per-Action-use or per-Trigger-fire.
+- **Active Traits only**: Only Traits that had at least one Action used or Trigger fire during the combat qualify for a discovery roll. Traits where only passive Stat Adjustments were active do NOT qualify. The [Combat Scoreboard](combat.md#combat-scoreboard) determines which Traits were active.
+- **One roll per Trait**: Each qualifying Trait gets exactly one discovery roll. This replaces the old per-component-use model, eliminating bias toward high-Action-count builds.
+- **Rarity weighting**: When a discovery succeeds, the specific Perk discovered is weighted by rarity — lower-minimum-star Perks are more likely to be discovered than higher-minimum-star ones.
+- **Full tree**: If all Perks in the Trait's tree are already owned, the roll is silently skipped (no discovery possible).
 - Even rare 5★ Perks can be discovered this way — though they are much less likely due to rarity weighting.
 
 ### Discovery Resolution (Post-Combat)
 
-- Discovery events are **collected during combat but resolved post-combat**, in the same phase as injury/death checks, recruitable NPC generation, and loot distribution.
+Discovery rolls are resolved during the [post-combat](post-combat.md) Perk Discovery phase:
+
 - The discovered Perk is presented to the player, who can **accept or reject** it.
 - **Accept**: The Perk is acquired at its minimum star level, free of XP cost.
 - **Reject**: The Perk is not acquired. It remains in the discovery pool for future rolls. No penalty for rejection.
 - **Level cap override**: Accepted discovered Perks override the Perk level cap at the moment of acquisition — they are acquired at their minimum star level even if it exceeds the parent Trait level. However, further manual leveling of the discovered Perk is still capped by the parent Trait level.
-- Multiple discoveries can occur in a single combat (from different Traits or even the same Trait). Each is presented individually for accept/reject.
+- Multiple discoveries can occur in a single combat (from different Traits). Each is presented individually for accept/reject.
+
+See [post-combat](post-combat.md) for the full resolution flow.
 
 ### Design Intent
 
+- End-of-combat per-Trait rolls are simpler to implement and fairer across builds than the old per-use model.
 - Post-combat resolution avoids interrupting combat flow and gives the player time to consider.
 - Accept/reject adds meaningful player agency to the random system — especially important now that Perks can have tradeoffs (negative Stat Adjustments or harmful Triggers).
 - Rejection keeps the Perk in the pool, so players can't "clear out" undesirable Perks by rejecting them permanently — they'll keep appearing until the tree is full.
 - Proactively buying desired Perks via Trainers shrinks the discovery pool, reducing the chance of discovering unwanted tradeoff Perks.
+- The "active Traits only" rule replaces the old "passive Stat Adjustments don't trigger discovery" rule — same intent (reward active combat participation), cleaner implementation.
 
 **Trait discovery** (acquiring entirely new Traits via combat, rather than just new Perks from existing Traits) is deferred to a later phase.
 
@@ -396,11 +401,11 @@ Bond Trait Perks follow a **hybrid utility + combat** pattern. Bond Perks grant 
 
 ## Perk Discovery Modifiers
 
-The base ~0.1% Perk Discovery chance is modified by multiple sources using **additive flat bonuses** and a **Trait Level multiplier**.
+The per-Trait Perk Discovery chance is modified by multiple sources using **additive flat bonuses** and a **Trait Level multiplier**. The base rate is a tuning value (higher than the old per-use 0.1% to produce similar per-fight discovery rates with the per-Trait model).
 
 ### Formula
 
-`Discovery Chance = (Base Rate (0.1%) + Luck Bonus + Perk Bonuses) × Trait Level Multiplier`
+`Discovery Chance per Trait = (Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier`
 
 ### Modifier Sources
 
@@ -533,11 +538,12 @@ When a Trait is respecced, equipment that required that Trait for equipping **st
 - **Rationale**: Makes Group membership and Bond Traits more meaningful — players need connections to the right Groups to access desired training. Generalist Groups ensure baseline accessibility.
 - **Implications**: Groups spec must define trainer menus per Group. Economy spec must handle pricing differences between specialist and generalist trainers.
 
-### Perk Discovery via Combat
+### Perk Discovery via Combat — Per-Trait End-of-Combat Roll
 
-- **Decision**: ~0.1% base chance per qualifying Perk component use (Actions and Triggers only — not passive Stat Adjustments) to discover a random unowned Perk from the same Trait's tree. Base rate modified by additive bonuses (Luck, Perks) then multiplied by Trait level (×1.0–×2.0). Acquired at minimum star level, free of XP cost. Discovery roll is rarity-weighted (lower-minimum-star Perks more likely). Discovered Perks override the Perk level cap at acquisition only; further leveling remains capped. Full tree = silently wasted roll.
-- **Rationale**: Rewards continued engagement with existing Perks. Creates exciting surprise moments. The low rate prevents it from undermining the trainer economy. Rarity weighting makes discovery of powerful Perks appropriately rare. Trait level multiplier rewards deep investment.
-- **Implications**: Combat spec must trigger Perk discovery checks on Action use and Trigger fire events. Economy impact is minimal at base 0.1% but should be monitored — at 5★ Trait with Luck and Perk bonuses, effective rate could approach ~0.5%.
+- **Decision**: Single end-of-combat discovery check per qualifying Trait (Traits that had at least one Action used or Trigger fire — "active Traits only"). One roll per Trait using: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier` (×1.0–×2.0). Acquired at minimum star level, free of XP cost. Discovery roll result is rarity-weighted (lower-minimum-star Perks more likely). Discovered Perks override the Perk level cap at acquisition only; further leveling remains capped. Full tree = silently skipped.
+- **Rationale**: Per-Trait end-of-combat rolls are simpler, fairer (no bias toward high-Action-count builds), and create a cleaner handoff to the [post-combat](post-combat.md) phase. The "active Traits only" rule replaces the old "passive Stat Adjustments don't trigger" rule with cleaner semantics. Rewards Trait investment and active combat participation.
+- **Implications**: Base rate is higher than the old per-use 0.1% (tuning value) to produce similar per-fight discovery rates. Post-combat spec owns resolution mechanics (accept/reject). Combat Scoreboard determines which Traits were "active."
+- **Alternatives considered**: Per-Action/Trigger-use during combat (original model — rejected for complexity and Action-count bias), per-character single roll (rejected — would not reward diverse Trait investment).
 
 ### No Star Gate for Trait Acquisition
 
@@ -657,15 +663,15 @@ When a Trait is respecced, equipment that required that Trait for equipping **st
 
 ### Discovery Rate: No Cap, Small Trees Sufficient
 
-- **Decision**: No hard cap on effective Perk Discovery rate. At high investment (5★ Trait + Luck + discovery-boosting Perks), per-roll rates can reach ~1%, giving ~30-40% chance per combat of discovering a Perk. The natural limit is the small tree size (2-4 discoverable Perks per Trait). Discovery-optimized builds filling trees faster is the intended reward for that investment.
-- **Rationale**: The tree size is the natural cap. Once all Perks are owned, rolls are wasted. A character investing heavily in discovery is choosing to use Perk slots and Trait levels for discovery bonuses rather than direct combat power — that's a legitimate build choice with meaningful opportunity cost.
-- **Implications**: Trainer economy remains viable because discovery requires deep investment to reach high rates, and each Trait tree has very few undiscovered slots. Monitoring recommended: if discovery rates make trainers irrelevant, tuning the base rate (0.1%) is the lever.
+- **Decision**: No hard cap on effective Perk Discovery rate per Trait. At high investment (5★ Trait + Luck + discovery-boosting Perks), per-Trait rates can be significant. The natural limit is the small tree size (2-4 discoverable Perks per Trait). Discovery-optimized builds filling trees faster is the intended reward for that investment.
+- **Rationale**: The tree size is the natural cap. Once all Perks are owned, rolls are skipped. A character investing heavily in discovery is choosing to use Perk slots and Trait levels for discovery bonuses rather than direct combat power — that's a legitimate build choice with meaningful opportunity cost.
+- **Implications**: Trainer economy remains viable because discovery requires deep investment to reach high rates, and each Trait tree has very few undiscovered slots. Monitoring recommended: if discovery rates make trainers irrelevant, tuning the base rate is the lever.
 
 ### Post-Combat Discovery Resolution with Rejection
 
-- **Decision**: Discovery rolls happen during combat but resolution occurs post-combat (alongside injury checks, NPC recruitment, loot). The player can accept or reject each discovered Perk. Rejected Perks remain in the discovery pool for future rolls.
+- **Decision**: Discovery rolls happen at end-of-combat (per qualifying Trait) and resolution occurs in the [post-combat](post-combat.md) Perk Discovery phase (alongside injury checks, NPC recruitment, loot). The player can accept or reject each discovered Perk. Rejected Perks remain in the discovery pool for future rolls.
 - **Rationale**: Post-combat resolution avoids interrupting combat flow. Accept/reject adds player agency, especially important now that Perks can have tradeoffs (negative components). Rejection keeping the Perk in the pool prevents players from "clearing out" undesirable Perks — they must buy them from trainers or accept the recurring discovery risk.
-- **Implications**: Combat spec must collect discovery events during combat and pass them to the post-combat phase. Post-combat UI must present each discovered Perk with full details for informed accept/reject decisions. Characters spec's post-combat phase now includes discovery resolution alongside injury/death, NPC recruitment, and loot.
+- **Implications**: Post-combat spec owns the discovery resolution UI and flow. Post-combat UI must present each discovered Perk with full details for informed accept/reject decisions.
 
 ### Tradeoff Perks via Existing Components
 
@@ -726,7 +732,8 @@ All structural, mechanical, and game design questions are resolved. Three non-bl
 | Spec | Implication |
 |------|-------------|
 | [characters](characters.md) | Trait Slot count defined by Character Star Rating. Core Traits may modify anatomical slots. Species = Core Traits pattern (no hardcoded species list). Post-combat phase now includes Perk Discovery resolution (accept/reject) alongside injury/death checks, NPC recruitment, and loot. |
-| [combat](combat.md) | Perks provide Actions (combat abilities), Stat Adjustments (combat stats), and Triggers (combat reactions). Simultaneous Trigger resolution (all qualifying Triggers fire together, no ordering). **Type-ordered** effect resolution within Actions: status/debuff → damage/healing → movement (defined by combat spec). Resource pool system: open/extensible, attribute-derived base + Perk bonus capacity (pre-multiplier), pools activate when first Perk references a resource. Multi-resource Action costs (any combo of pools). Resource pools start at full capacity; no default regen for Trait-granted resources (regen comes from Perks/Triggers). Per-stat scaling multipliers for resource pools (also amplify bonus capacity). Trait/Perk level amplification multipliers — shared curve ×1.0/×1.2/×1.4/×1.7/×2.0 (tuning values). Tag-scoped Stat Adjustments can be flat or percentage; percentages stack additively across different tags on the same Action; application order: flat → percentage on already-scaled values. All cooldowns reset per-combat (no cross-fight persistence). Perk Discovery: rolls collected during combat, resolved post-combat (accept/reject). Base rate modified by Luck/Perks (additive) then ×Trait level (×1.0–×2.0). No rate cap — small trees are natural limit. Tradeoff Perks (negative Stat Adjustments / harmful Triggers) possible via existing components. Combat spec defines: canonical target tag vocabulary and resolution rules, canonical Trigger event type vocabulary, canonical effect component type catalog. |
+| [combat](combat.md) | Perks provide Actions (combat abilities), Stat Adjustments (combat stats), and Triggers (combat reactions). Simultaneous Trigger resolution (all qualifying Triggers fire together, no ordering). **Type-ordered** effect resolution within Actions: status/debuff → damage/healing → movement (defined by combat spec). Resource pool system: open/extensible, attribute-derived base + Perk bonus capacity (pre-multiplier), pools activate when first Perk references a resource. Multi-resource Action costs (any combo of pools). Resource pools start at full capacity; no default regen for Trait-granted resources (regen comes from Perks/Triggers). Per-stat scaling multipliers for resource pools (also amplify bonus capacity). Trait/Perk level amplification multipliers — shared curve ×1.0/×1.2/×1.4/×1.7/×2.0 (tuning values). Tag-scoped Stat Adjustments can be flat or percentage; percentages stack additively across different tags on the same Action; application order: flat → percentage on already-scaled values. All cooldowns reset per-combat (no cross-fight persistence). Tradeoff Perks (negative Stat Adjustments / harmful Triggers) possible via existing components. Combat spec defines: canonical target tag vocabulary and resolution rules, canonical Trigger event type vocabulary, canonical effect component type catalog. Combat Scoreboard tracks per-character stats including Actions used (determines active Traits for Perk Discovery). |
+| [post-combat](post-combat.md) | Perk Discovery: per-Trait end-of-combat roll for active Traits only. Base rate modified by Luck/Perks (additive) then ×Trait level (×1.0–×2.0). No rate cap — small trees are natural limit. Resolution: accept/reject per discovery. Post-combat also handles injury/death, recruitment, and loot. |
 | [equipment](equipment.md) | Equipment can require specific Traits/Perks (acquisition-only check — stays equipped if requirement later unmet). Affix bonuses can enhance specific Perks. Tags create Perk–equipment synergies (shared tag vocabulary, including auto-tags from resources). Variable anatomy from ancestry Core Traits affects available slots. |
 | [consumables](consumables.md) | Specialist Perks (Bomber, Apothecary) amplify consumable effectiveness. Scribe Perk enables Scroll creation from known Perks. Tags create Perk–consumable synergies. |
 | [combat-ai](combat-ai.md) | Personality archetype tags on Core Traits feed the AI Personality Score track. Each Perk Action includes an `ai` block (gates, tactical_scorers, personality_scorers) that defines how the Utility AI evaluates it. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), and tag-based targeting. Default Actions (Combatant system Trait) have embedded Considerations. **Key challenge**: No Action count limit — Utility AI must efficiently score 20-40+ Actions per character. |
@@ -739,4 +746,4 @@ All structural, mechanical, and game design questions are resolved. Three non-bl
 
 ---
 
-_Last updated: 2026-02-17 — Added AI Considerations as Perk Action component (ai block with gates, tactical_scorers, personality_scorers). Added personality archetype tags on Core Traits for combat AI Personality Score track. Updated combat-ai implications for Utility AI system. Previous: 2026-02-16 effect resolution order update._
+_Last updated: 2026-02-18 — Perk Discovery model changed from per-Action/Trigger-use during combat to per-Trait end-of-combat roll. "Active Traits only" rule replaces "passive Stat Adjustments don't trigger." Added post-combat.md cross-references. Previous: 2026-02-17 AI Considerations added. 2026-02-16 effect resolution order update._
