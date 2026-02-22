@@ -41,7 +41,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | Area | Doc | Status | Notes |
 |------|-----|--------|-------|
 | System Overview | [overview.md](architecture/overview.md) | 🟡 | Philosophy, constraints, non-goals, star rating system |
-| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation: Actions (target tags, effect component list, speed, cooldown, resource costs, `primary_damage_type`), Stat Adjustments (two subtypes: flat `{stat_key, value}` and tag-scoped `{tag, stat_key, value, value_type: "flat"|"percentage"}`), Triggers (event type, effect component list). Effect components use generic typed format (type tag + key-value parameters). Prerequisite graph must be acyclic (content validation). **From combat**: Hidden system Trait type (Combatant), per-family Soak values (3 families: Physical/Elemental/Magical), Physical + Magic Defense as derived stats, universal Penetration, per-component damage resolution, tiered injury roll data (two-tier check with overkill factor), overkill tracking per Fallen character, target tag vocabulary, Trigger event vocabulary (25+ event types including OnDyingBlow), effect component type catalog (11+ types with parameters), Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO), Context Flags schema, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking. **From combat rounds 10-13**: Formula modifier tag representation (attribute substitution: `{source_attr, target_attr, formula_scope}`), per-weapon-type Attack/Damage formula definitions (content data, not schema), summon templates (stat blocks, AI configs, duration), `team_sizes: [int]` list in Context Flags schema (replaces `team_size`/`opponent_team_size`). Stat Adjustment now three subtypes (flat, tag-scoped, formula modifier). |
+| Data Model | [data-model.md](architecture/data-model.md) | 🔴 | Entity relationships, storage approach — deferred until domains stabilize. **From traits-and-perks**: Trait/Perk data shape definition (Trait → Perk tree, tag lists, loot table weights). Resource type definitions are content data (name, pool formula, auto-tag) — not hardcoded schema. Perk components need structured representation: Actions (target tags, effect component list, speed, cooldown, resource costs, `primary_damage_type`), Stat Adjustments (two subtypes: flat `{stat_key, value}` and tag-scoped `{tag, stat_key, value, value_type: "flat"|"percentage"}`), Triggers (event type, effect component list). Effect components use generic typed format (type tag + key-value parameters). Prerequisite graph must be acyclic (content validation). **From combat**: Hidden system Trait type (Combatant), per-family Soak values (3 families: Physical/Elemental/Magical), Physical + Magic Defense as derived stats, universal Penetration, per-component damage resolution, tiered injury roll data (two-tier check with overkill factor), overkill tracking per Fallen character, target tag vocabulary, Trigger event vocabulary (25+ event types including OnDyingBlow), effect component type catalog (11+ types with parameters), Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO), Context Flags schema, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking. **From combat rounds 10-13**: Formula modifier tag representation (attribute substitution: `{source_attr, target_attr, formula_scope}`), per-weapon-type Attack/Damage formula definitions (content data, not schema), summon templates (stat blocks, AI configs, duration), `team_sizes: [int]` list in Context Flags schema (replaces `team_size`/`opponent_team_size`). Stat Adjustment now three subtypes (flat, tag-scoped, formula modifier). **From equipment**: Weapon type definitions (base damage, formula weights, tags, range, Action Speed), armor type definitions (base Soak, scaling weights, slot coverage, category), affix schema (type, tier pool, source-themed weight tables, positive/negative), item instances (type, quality, max durability, affix list), multi-slot anatomical mapping, block chance/value on shield items, equipment-granted Action data (same as Perk Action model), item-local Formula Modifier Tag affixes, loot table schema (per-event, per-enemy, with affix source overrides), default humanoid anatomy (11 slots). |
 | Meta-Balance | [meta-balance.md](architecture/meta-balance.md) | 🔴 | **NEW** — Automatic underdog balancing system: win/loss ratio tracking per Trait, automatic bonuses for underperforming Traits/builds. Cross-cutting system affecting combat, tournaments, and economy. **From traits-and-perks**: build diversity philosophy relies on this system as a fourth pillar alongside economic scarcity, content variety, and roster pressure. |
 | MVP Scope | [mvp-scope.md](architecture/mvp-scope.md) | 🟡 | MVP 0 / MVP 1 boundaries, parking lot |
 
@@ -58,12 +58,12 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 | 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 14-19 — 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save, summoner revival), summon control capacity budget, mutual elimination draw, non-Stamina resource hard-gating, crit/resistance/stealth formulas resolved, min 1 stack, frozen decay while Fallen, Fallen Resolution in Initiative order, default Attack costs Stamina, formula representation, formula modifier per-category scope, Revive on any ally + `[Fallen]` target tag. 19 rounds total, 100 decisions. |
 | 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟢 | 1 | Updated 2026-02-18: 8 interrogation rounds, 18 decisions. Injury mechanics fully specified (diminishing returns formula, Injury Resistance derived stat, tiered severity, named injury catalog, game-tick recovery, death immunity Perks). XP: equal share + participation bonus. Recruitment: NPC generation from event archetype pool, declined → Free Agent. Per-event post-combat configuration. Tournament: full post-combat per round, immediate effects. |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Updated 2026-02-18: Context Flags reference combat.md for canonical schema. resource_efficiency uses fight phase signal. Previous: Round 2 (14 decisions). Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
-| 5 | Equipment | [equipment.md](domains/equipment.md) | 🟡 | 2 | Quality scaling (linear vs diminishing), degradation rate, loot curves. **From combat**: Penetration as valid affix stat (reduces Soak before formula), crit bonus affixes, stealth-tagged effects. |
+| 5 | Equipment | [equipment.md](domains/equipment.md) | 🟢 | 2 | Updated 2026-02-21: 31 interrogation rounds, 103 decisions. **Round 31 (cleanup)**: Deadly/Sunder per-implement scope, tag-derived Action Speed, enchanting source-themed, DW penalties (−15%/−35%), armor Speed penalties (Med −2/Hvy −5), armor 3-attribute scaling locked, degradation ~2/fight, percentage-based penalties (~20%). All design decisions resolved. Remaining: implementation-phase tuning values and deferred economic numbers. |
 | 6 | Consumables | [consumables.md](domains/consumables.md) | 🟡 | 2 | Quality levels, crafting recipe acquisition, scroll failure formula |
-| 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services. XP earn rates per fight (per-character). Hiring cost should factor starting Trait count. **From traits-and-perks**: Trainer service fees (gold) for Trait/Perk leveling, respec gold cost formula, XP cost schedule (100/300/600/1000/1500) interactions, Group-specific trainer fee model (specialist vs. generalist pricing differences), XP cost as natural gate for high-star Traits on low-star characters |
-| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★), one Bond Trait per Group per character, each Group defines exactly one Bond Trait. Note: Bond level no longer has a special Perk Discovery bonus — discovery is driven by Trait Level Multiplier (universal across all categories). |
+| 7 | Economy | [economy.md](domains/economy.md) | 🟡 | 3 | Primary gold sink, XP scaling, tick frequency, PvE availability. **From characters**: Promotion costs metacurrency only (very expensive), training cost = Current value per +1. Pricing/transaction mechanics for Group services. XP earn rates per fight (per-character). Hiring cost should factor starting Trait count. **From traits-and-perks**: Trainer service fees (gold) for Trait/Perk leveling, respec gold cost formula, XP cost schedule (100/300/600/1000/1500) interactions, Group-specific trainer fee model (specialist vs. generalist pricing differences), XP cost as natural gate for high-star Traits on low-star characters. **From equipment**: Three-tier repair costs (cheap/standard/premium), quality forging exponential cost, affix rerolling costs (gold + materials), enemy drop quality penalty, loot table drop rates per event type. |
+| 8 | Groups | [groups.md](domains/groups.md) | 🟡 | 3 | Group count for MVP, reputation/standing system, Group relationships, service scaling by Bond star level, Group discovery/unlock. **From characters**: NPC membership effects (vendor inventories, loot tables, trainer availability), Free Agent pool (persistent Named NPCs recruitable by players), each recruiting Group must have a Bond Trait (guaranteed at generation). **From traits-and-perks**: Trait generation loot table definitions per Group/archetype (nestable weighted subtables, openness parameter), trainer availability model (Group-specific theme alignment, generalist Groups for baseline access), Bond Trait hybrid scaling (smooth benefits + discrete tier unlocks at 3★/5★), one Bond Trait per Group per character, each Group defines exactly one Bond Trait. Note: Bond level no longer has a special Perk Discovery bonus — discovery is driven by Trait Level Multiplier (universal across all categories). **From equipment**: Quality forging requires specific Group service (e.g., Blacksmith's Guild). Different Groups offer different affix reroll services (single-affix vs. full-affix). Source-themed affix tables per Group vendor. Different repair tier access per Group. |
 | 9 | Roster Management | [roster-management.md](domains/roster-management.md) | 🟡 | 3 | Roster size limits, metacurrency rates, endgame, base building scope. **From characters**: activity restrictions during Recovering state, recovery tick durations, character dismissal/firing mechanics, Free Agent recruitment, post-battle recruitment flow |
-| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state). **From traits-and-perks**: Star-gated tournament entry to manage power gaps. Per-combat cooldown reset means no cross-fight cooldown attrition. **From combat**: Attrition ramp onset/rate per event type. Per-combat resource/cooldown resets between rounds. **From post-combat**: Injury/death, Perk discovery, recruitment, loot handled per round by [post-combat](domains/post-combat.md). **⚠️ Fight length revised to 25–150 ticks** — tournament pacing assumptions need updating. |
+| 10 | Tournaments | [tournaments.md](domains/tournaments.md) | 🟡 | 3 | Elimination format, injury timing, multi-tournament rules, forfeit. **Needs**: crowd/momentum section (Charisma-driven). **From characters**: configurable Health/Stamina reset per event type, define which event types are "lethal" (can cause Dead state). **From traits-and-perks**: Star-gated tournament entry to manage power gaps. Per-combat cooldown reset means no cross-fight cooldown attrition. **From combat**: Attrition ramp onset/rate per event type. Per-combat resource/cooldown resets between rounds. **From post-combat**: Injury/death, Perk discovery, recruitment, loot handled per round by [post-combat](domains/post-combat.md). **From equipment**: Equipment locked at tournament registration — no swaps between rounds. **⚠️ Fight length revised to 25–150 ticks** — tournament pacing assumptions need updating. |
 | 11 | Quests | — | 🔴 | 4+ | Future system. Tasks offered by Groups for rewards. Not yet scoped. |
 
 ---
@@ -80,7 +80,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 
 | Epic | Doc | Status | Blocked By |
 |------|-----|--------|------------|
-| Overview | [overview.md](implementation/mvp-1/overview.md) | 🔴 | MVP 0 complete + Equipment, Consumables, Combat AI specs |
+| Overview | [overview.md](implementation/mvp-1/overview.md) | 🔴 | MVP 0 complete + Equipment 🟢, Consumables 🟡, Combat AI 🟢 — Equipment complete, Consumables needs interrogation. |
 
 ---
 
@@ -129,6 +129,114 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-21: Equipment Cleanup Round 31 — 15 Decisions (Complete → 🟢)
+
+- **Completed equipment spec** with 103 decisions across 31 interrogation rounds. Status updated from 🟡 to 🟢 Complete.
+- **Deadly/Sunder per-implement**: Offensive implement tags (Deadly, Sunder) apply only to attacks made with that specific implement. Defensive tags (Defend, Deflect) remain passive/character-wide. Clean split: defensive = always on, offensive = per-weapon.
+- **Action Speed tag-derived**: Light (+bonus), Heavy (−penalty), Two-Handed (−small). No per-type modifiers. Simpler, fewer knobs.
+- **Enchanting source-themed**: Group vendor theme biases available affixes for enchanting, same as loot generation.
+- **No Versatile focuses**: Focuses are strictly Light or Two-Handed. Versatile is weapons-only.
+- **DW penalties locked**: Main-hand −15%, off-hand −35% (Attack and Damage). Raw DW ≈ 75% output. Perk-gated investment.
+- **Armor Speed penalties locked**: Medium −2, Heavy −5 per piece (Light = 0). Full Heavy = −30 Speed. Forces mixed loadouts.
+- **Armor 3-attribute scaling locked**: Heavy (55% End + 30% Mig + 15% Spd), Medium (40% End + 30% Spd + 30% Awr), Light (60% Spd + 30% Awr + 10% End).
+- **Degradation base rate**: ~2 quality per fight at 1.0× usage. A 100-quality item lasts ~50 fights.
+- **Percentage-based penalties**: Reach/Ranged (~20% Attack Value), Multihit additional targets (~15–20% Attack Value). Scales with character power.
+- **Accessory degradation**: Proportional to combat length (ticks survived).
+- Updated specs:
+  - `equipment.md` — 15 new decisions (#89-103). Status → 🟢. Implement tags updated with scope (passive vs per-implement). All penalty ranges locked. Armor scaling locked. Open Questions reduced to implementation-phase tuning only.
+  - `glossary.md` — 6 updated (Weapon Type, Focus Type, Tag, Dual-Wield, Durability, Enchanting).
+  - Downstream flagged: characters (remove "5 Equipment Slots" reference), combat (percentage penalties, Deadly/Sunder per-implement resolution), data-model (implement tag scope field, armor 3-attribute scaling, tag-derived Action Speed)
+
+### 2026-02-21: Equipment Interrogation — 66 Decisions (Rounds 24-25: Focus Types + Implement Tags)
+
+- **FOCUS TYPE REDESIGN (Round 24)**: 7 focus types with distinct combat roles, replacing previous 5 types. Relic split into Holy Symbol + Artifact. Rod added.
+- **Wand**: Long range, single target, lower base damage, Deadly tag (crit bonus). Sniper. Intellect + Accuracy.
+- **Tome**: Long range, Multihit tag (AoE). Grenade lobber. Two-Handed. Intellect + Awareness.
+- **Staff**: Medium range, high base damage, Defend + Deflect tags (Phys + Magic Defense). Tanky two-hander. Intellect + Willpower.
+- **Orb**: Medium range, Multihit tag (AoE). One-hand Light. Intellect-weighted.
+- **Holy Symbol** (was Relic): Short range, Deflect + Multihit tags (AoE + Magic Defense). Willpower-weighted.
+- **Artifact** (split from Relic): Long range, single target, wild card. Template overrides per item.
+- **Rod** (NEW): Short range, single target, Defend tag (Physical Defense). Caster tank. Willpower + Endurance.
+- **Focus = magic weapon for damage**: Focus provides default damage basis for magic Actions. Perk Actions override range/tags but use focus base power.
+- **One adaptive Attack**: Single Attack Action adapts to main-hand. Multihit tag changes targeting to AoE.
+- **IMPLEMENT TAG SYSTEM (Round 25)**: 4 new tags shared across weapons and focuses:
+  - **Defend**: +~10% of implement's Attack Value → Physical Defense bonus. On: Staff, Rod. May apply to some weapons.
+  - **Deflect**: +~10% of implement's Attack Value → Magic Defense bonus. On: Staff, Holy Symbol.
+  - **Deadly**: Crit chance bonus. On: Wand, Axe (weapon). Implement's base damage set lower to compensate.
+  - **Multihit**: Default Attack hits N different enemies in zone (AoE). One attack roll. N is type-defined. On: Tome, Orb, Holy Symbol.
+- **Artifact template overrides**: Individual Artifact item templates can override base combat role fields (range, tags, targeting, bonuses). More a category than a fixed type.
+- **Multihit unified**: Multi-target and multi-hit are the same mechanic — all three (Tome, Orb, Holy Symbol) hit N enemies via AoE.
+- Updated specs:
+  - `equipment.md` — Focus Types table with tags, Implement Tags section, Default Attack Adaptation updated, Axe gets Deadly, decisions 60-66.
+  - `glossary.md` — Focus Type updated, Tag updated (implement tags: Defend/Deflect/Deadly/Multihit).
+  - Downstream flagged: combat (Defend/Deflect/Deadly/Multihit tag resolution, Artifact overrides), data-model (implement tags, Artifact template overrides, Multihit N per type)
+
+### 2026-02-19: Equipment Interrogation — 59 Decisions (Rounds 16-23: Major Restructure)
+
+- **MAJOR RESTRUCTURE**: Weapons and Focuses now parallel Hand-slot implement categories. Status reverted 🟢 → 🟡 (Focus ranges/formulas still pending).
+- **Weapons = physical implements**: Sword, Dagger, Mace, Axe, Spear, Greatsword, Warhammer, Bow. Define base damage for physical Actions.
+- **Focuses = magical implements**: Staff, Wand, Tome, Orb, Relic. Define base magic power for magical Actions. Same mechanical role as weapons. Staff/Wand/Tome moved OUT of weapons table.
+- **Off-hand bonus attack**: Every Action triggers a generic Attack from the off-hand implement. Main-hand Action resolves first (full effects), then off-hand fires a basic Attack of its type. Physical Action + magic off-hand = physical strike + magic bonus. Magic Action + weapon off-hand = spell + physical bonus.
+- **Implement resolution**: Actions specify physical or magical implement type. Fallthrough: main-hand → off-hand → default (Unarmed/Unfocused).
+- **Unfocused magic default**: Magic without a focus = weak default (like Unarmed for physical). Perks can enhance.
+- **Mixed weapon+focus builds**: Sword+Orb is hybrid. Any combination valid.
+- **Light-only off-hand (both categories)**: Weapons and focuses restricted to Light tag for off-hand. Perk override (Ambidextrous).
+- **DW = one Action + bonus attack**: Not two separate Actions. One Initiative cost. Off-hand auto-fires generic Attack.
+- **Per-implement Trigger firing**: Each implement's procs fire only on its own hits.
+- **Equipment combat lock**: All fights (not just tournaments) snapshot equipment at combat start.
+- **Random 1-to-max affix count**: Loot variance. Fewer affixes = stronger each.
+- **Enchanting service (NEW)**: Group vendor fills empty affix slots. Two-step upgrade: forge to open slots, enchant to fill them.
+- **Cursed items**: Free unequip (no sticky curses). Negative affixes rerollable via standard vendor services.
+- **Always visible affixes**: No identification mechanic.
+- **Focus tag replaces Arcane Focus**: Generic tag on all focuses.
+- **Orb**: One-hand Light focus. Intellect-weighted (arcane/destructive).
+- **Relic**: One-hand Light focus. Willpower-weighted (divine/protective). Replaces Holy Symbol.
+- **Focus ranges and formulas**: Deferred to next interrogation.
+
+#### Previous rounds (1-15):
+- **Completed equipment spec** with 25 decisions across 9 interrogation rounds. Status updated from 🟡 to 🟢 Complete.
+- **Quality scaling: Linear confirmed**. Quality multiplies base stats, but base stats feed into attribute-blend formulas. "Squire with Excalibur ≈ Musashi with an oar" — build depth is the dominant power axis, not gear quality.
+- **Weapon type defines all**: Base damage, Attack/Damage formula weights, tags, range, speed. Individual items vary by quality + affixes. Rare affixes can override formula weights (item-local Formula Modifier Tags, e.g., Charisma-scaling sword).
+- **Degradation: Per-fight with usage weight**. `base_degrade × usage_weight` (weapons: Actions taken, armor: damage absorbed). No quality floor — full decay to 0 = item destroyed. Maximum economic pressure.
+- **Three-tier repair**: Cheap (max−2), Standard (max−1), Premium (max, very expensive). Economic choices about gear lifespan.
+- **Quality forging**: Group-gated (e.g., Blacksmith's Guild), exponential cost. MVP 1. Creates "maintain vs. replace" tension.
+- **Tiered affix pools**: Progressive unlock per quality tier. 1-2★ basic stats, 3★ damage types + procs, 4★ formula modifiers + simple Actions, 5★ rare unique mechanics.
+- **Source-themed affix generation**: Each loot source (event type, enemy type, Group vendor) biases toward thematic affixes.
+- **Affix rerolling**: Vendor-dependent — different Groups offer single-affix vs. full-affix rerolling.
+- **Block Chance from shield items**: Post-hit flat reduction. Shield items have block chance % + block value (quality-scaled). Separate from Perk/spell Shield HP-pool mechanic.
+- **Accessories in MVP 1**: Rings (2x Finger), Amulet (Neck), Cloak (Back). Pure affix carriers.
+- **Default humanoid anatomy: 11 slots**: Head, Torso, Arms, Legs, Hands, Feet, 2x Hand, 2x Finger, Neck, Back.
+- **Hand slots**: 2x flexible. Hold Weapons (physical) OR Focuses (magical) OR Shields. Any combination. Dual-wield = one Action + off-hand generic bonus Attack with penalties (Perks mitigate). Versatile = auto-mode by off-hand occupancy, two stat profiles.
+- **Equipment can grant Actions**: Same data model as Perk Actions. Available at 4-5★ affix pools.
+- **Armor: Hybrid flat + scaling**: Flat base Soak (quality-scaled) + attribute-scaling per armor type (Light: Speed+Awareness, Medium: Endurance+Speed, Heavy: Endurance+Might).
+- **Multi-slot items: Less than proportional** (~1.0/1.7/2.2/2.6/3.0× for 1-5 slots).
+- **Damage-type affixes add effect components**: +Fire affix adds Fire Damage component to Attack action, resolves through Elemental Soak.
+- **Cursed items**: Negative affixes alongside positive ones. Always identified.
+- **Loot generation: Hybrid** — event loot tables + enemy equipment drops (quality penalty).
+- **MVP types defined**: 12 weapon types, 18 per-slot armor pieces + 3 multi-slot + 3 shields + 3 accessories.
+- **Thrown weapons deferred**: Will be Consumables when added.
+- **Rounds 10-15 (deepening)**: 16 additional decisions across 6 rounds.
+- **Armor Speed penalties**: Flat per piece (Bonus Modifier). Medium/Heavy pieces impose stacking Speed reduction.
+- **Armor Soak families**: All armor contributes to all 3 Soak families at different ratios (Heavy: 60/25/15 Physical/Elemental/Magical, Light: 15/25/60, Medium: 40/35/25).
+- **Armor mixing**: Free, no interaction. Each piece independent.
+- **Household stash**: Shared storage, no per-character inventory. Items don't degrade in stash.
+- **Death & gear**: Preserved on corpse. Returns to stash if permanently lost.
+- **Proc effects = Triggers**: Equipment proc affixes use the combat Trigger system (OnHit, etc.). No new mechanic.
+- **Ranged Short range penalty**: Accuracy penalty at Short range, mirroring Reach penalty at Medium.
+- **Unified affix/Perk data model**: Affixes ARE mini-Perks — same component schema (Stat Adjustments, Triggers, Actions, Damage). Maximum code reuse.
+- **Unique items**: Templates with fixed name/lore/some affixes + 1-2 random slots. Chase items from specific sources.
+- **Sell or salvage**: Two disposal paths — gold or materials. Material system (tiered + typed) deferred.
+- **Tournament equipment lock**: Gear locked at registration. No swaps between rounds.
+- **Unarmed as valid choice**: Empty Hand slots = Unarmed build path.
+- **Continuous affix quality scaling**: `affix_power = base × tier_multiplier × (quality/100)`. Every quality point matters for affix power, not just tier thresholds.
+- **Dual-wield revised**: Two independent attack rolls (not one). Main-hand has small Attack/Damage penalty, off-hand has moderate penalty. Perks (Ambidextrous, Two-Weapon Fighting) mitigate.
+- **Versatile two stat profiles**: Each Versatile weapon type defines both one-hand and two-hand stat profiles. Weapon type template carries both.
+- **Block proportional split**: Block value splits proportionally across multi-component damage based on relative magnitudes.
+- Updated specs:
+  - `equipment.md` — 59 decisions across 23 rounds. Major restructure: parallel weapon/focus categories, off-hand bonus attack, implement resolution, enchanting service.
+  - `glossary.md` — 12 new terms total (Focus Type, Unfocused, Implement Resolution, Enchanting + earlier terms). 10+ updated (Weapon Type, Dual-Wield, Tag + earlier terms).
+  - Downstream flagged: combat (implement type on Actions, off-hand bonus attack pipeline, equipment combat lock, block proportional split, dual-wield as single Action), characters (Combatant Trait provides Unarmed + Unfocused), traits-and-perks (Ambidextrous Perk, cross-implement Perks, DW enhancement Perks), combat-ai (DW = one Action for AI, hybrid builds), economy (enchanting costs, three-tier repair, forging, reroll), groups (NEW: Enchanting service, forging/reroll/repair), data-model (two implement categories, implement type on Actions, variable affix count, Focus type definitions)
 
 ### 2026-02-18: Post-Combat Interrogation — 18 Decisions (Complete)
 
@@ -521,4 +629,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-18 — Post-combat interrogation complete: 18 decisions across 8 rounds. Injury mechanics, XP distribution, recruitment (NPC generation), per-event configuration, tournament post-combat. Updated post-combat.md (🟡→🟢), glossary.md, MASTER.md. Six core specs now 🟢 Complete._
+_2026-02-21 — Equipment cleanup round 31: 103 decisions total. Deadly/Sunder per-implement, DW penalties (−15%/−35%), armor Speed/scaling locked, percentage-based penalties. Status → 🟢 Complete. Seven specs 🟢 Complete._
