@@ -1,7 +1,7 @@
 # Combat — Domain Specification
 
-**Status**: 🟢 Complete (updated 2026-02-18: rounds 14-19 — 18 additional decisions: revival mechanics, summon control capacity, resistance/crit/stealth formulas, Fallen resolution order, formula representation, default action costs)
-**Last interrogated**: 2026-02-18
+**Status**: 🟢 Complete (updated 2026-02-22: rounds 26-31 — 23 additional decisions: implementation readiness pass — hit bonus primary-only, deferred OnKill queue, Step 5 kill triggers, Effects Phase ordering, default Action Speeds, Revive Step 0, detection per-turn, trigger vocabulary expansion)
+**Last interrogated**: 2026-02-22
 **Last verified**: —
 **Depends on**: [characters](characters.md), [traits-and-perks](traits-and-perks.md)
 **Depended on by**: [combat-ai](combat-ai.md), [post-combat](post-combat.md), [tournaments](tournaments.md)
@@ -15,6 +15,14 @@ Combat is the core gameplay loop — automated tactical fights between teams of 
 ---
 
 ## Core Concepts
+
+### Numeric System
+
+All combat values are **integers**. Fractional results always **round up** (ceiling). This applies to damage, healing, Soak reduction, Initiative gain, formula evaluation, status decay, and all other combat calculations.
+
+- **Minimum 1 damage per component**: Every damage component that successfully hits deals at least 1 damage after all reductions. Chip damage always matters.
+- **Minimum 1 stack**: Status effects always apply at least 1 stack even after Resistance reduction (see [Status Effect System](#status-effect-system)).
+- **Rounding direction**: Ceiling rounding favors attackers and status appliers — even tiny fractional damage rounds to 1. All formula evaluations produce integers.
 
 ### Battle Format
 
@@ -61,12 +69,23 @@ Each combat tick resolves in a fixed order:
 2. **Initiative Phase**: All characters add `sqrt(Speed) × global_initiative_multiplier` to their Initiative meters
 3. **Turns Phase**: Characters whose Initiative ≥ 100 take their turns in **global Initiative order** (highest first, with tie-breaking rules), interleaved between teams — there is no team-alternating turn structure. Characters evaluate and act **sequentially** — board state updates after each character acts, so later characters react to the updated state. See [combat-ai](combat-ai.md) for team coordination details.
 4. **Fallen Resolution**: A pure HP check at tick end — all characters whose HP is below 1 at this point enter the Fallen state. **Healing saves**: if a character was reduced below 0 HP earlier in the tick but healing (from allies, self-heal via Dying Blow, or Triggers) brought them back above 0 HP before this step, they do **not** enter Fallen. Characters enter Fallen in **reverse Initiative order** (lowest Initiative first); `OnFallen` Triggers fire sequentially in this order. Overkill values are recorded (overkill = abs(final_HP) regardless of damage source, including DoTs). Dying Blow Actions taken during the Turns Phase are recorded in the Combat Scoreboard.
+5. **Kill Triggers**: Batch-fire all confirmed kill-related triggers (`OnKill`, `OnFallen`, `OnAllyFallen`) for characters who entered Fallen in Step 4. Each kill event tracks the causing Action and character. AoE kills from the same Action share a batch. See [Deferred Kill Trigger Model](#deferred-kill-trigger-model) for details.
 
 **One turn per tick**: Each character acts **at most once per tick**. If a character's Initiative remains ≥ 100 after acting (e.g., fast Action with high Speed), the excess carries over to the next tick. Very fast characters can act in consecutive ticks before anyone else gets a turn — appearing to chain actions — but each action is in a separate tick.
 
 **Full-tick death deferral**: When a character's HP drops below 0 — whether from the Effects Phase (DoTs) or from another character's Action during the Turns Phase — they are **not** immediately removed. They finish the full tick: remaining effects resolve, they accumulate Initiative, and they can even take their turn if they have Initiative ≥ 100. The Fallen state is applied at the end of the tick (step 4). Actions taken by a character at ≤0 HP are **Dying Blows** (see below).
 
 This order means DoTs and status decay happen before any character acts, Initiative accumulates before turns resolve, and death is always deferred to the end of the tick for maximum drama.
+
+### Effects Phase Internal Ordering
+
+The Effects Phase (Step 1 of tick resolution) resolves in a fixed internal order:
+
+1. **Decay**: All stacks on all active statuses decay. Per-character ordering: highest stack count first (tiebreaker: alphabetical status name or definition order). All characters process decay simultaneously (no cross-character dependency).
+2. **Effects**: All per-stack effects apply (DoT damage, regen ticks, stat modifications). Same per-character ordering (highest remaining stack first). All characters process effects simultaneously.
+3. **Shield Expiry**: Expired shields are removed last.
+
+**Key implication**: Shields protect against DoTs on their final tick — shields expire AFTER effects apply. A shield set to expire this tick still absorbs DoT damage dealt in the same Effects Phase.
 
 ### Dying Blows
 
@@ -112,9 +131,11 @@ A standard turn: **one Action**. All characters have access to default Actions v
 
 **Default Actions** (available to all characters):
 - **Attack**: Standard damage using equipped weapon's formulas. If no weapon equipped, uses a weak **unarmed attack** (Blunt damage, attribute-scaled with Might). **Costs a small amount of Stamina** (tuning value). See [Attack & Damage Formulas](#attack--damage-formulas).
-- **Move**: Change zones (costs full turn). **Free** (no resource cost).
-- **Defend**: Fixed percentage boost to Defense and Soak until next turn; provides a Stamina recovery burst equal to Y% of max Stamina pool (tuning value). **Free** (no resource cost).
-- **Search**: Active stealth detection — searches entire map (see [Stealth & Detection](#stealth--detection)). **Free** (no resource cost).
+- **Move**: Change zones (costs full turn). **Free** (no resource cost). **Action Speed +25** (costs only 75 Initiative).
+- **Defend**: Applies the **Defending** status (1 stack, special decay: clears on turn start). While active, provides a fixed percentage boost to **both** Physical Defense and Magic Defense, and **all three** Soak families (Physical, Elemental, Magical). Also provides a Stamina recovery burst equal to Y% of max Stamina pool (tuning value). **Free** (no resource cost). **Action Speed +25** (costs only 75 Initiative). If the character is stunned and cannot take turns, Defending persists (no tick limit — accepted as thematic: a braced character who gets stunned is harder to kill while helpless).
+- **Search**: Active stealth detection — searches entire map (see [Stealth & Detection](#stealth--detection)). **Free** (no resource cost). **Action Speed +50** (costs only 50 Initiative).
+
+**Defend + Stun design note**: The interaction where Defending persists through stun (since "clears on turn start" and stunned characters never get turns) is an accepted emergent strategy. A team could deliberately stun their own Defended tank for indefinite defense — this costs the stunner's Action and deals friendly fire damage from the stun-applying ability, creating a meaningful trade-off. Content can provide anti-stun and dispel mechanics as counters.
 
 **Perk-granted Actions**: Active abilities with variable Action Speed, cooldowns, and resource costs. All cooldowns reset fully between fights (per-combat only — see [traits-and-perks](traits-and-perks.md)).
 
@@ -127,61 +148,85 @@ Action Speed is a flat modifier to the base −100 Initiative cost after acting.
 - **Base cost**: −100 Initiative
 - **Fast action**: Positive Action Speed modifier. Example: Action Speed +30 → character loses only 70 Initiative (100 − 30 = 70)
 - **Slow action**: Negative Action Speed modifier. Example: Action Speed −40 → character loses 140 Initiative (100 − (−40) = 140)
-- **Default Actions**: Attack, Move, Defend, and Search have Action Speed 0 (standard −100)
+- **Default Action Speeds**:
+  - **Attack**: Action Speed 0 (costs 100 Initiative) — standard baseline
+  - **Move**: Action Speed +25 (costs 75 Initiative) — quick non-offensive action
+  - **Defend**: Action Speed +25 (costs 75 Initiative) — quick non-offensive action
+  - **Search**: Action Speed +50 (costs 50 Initiative) — deliberately fast, map-wide detection at low cost
 
-Fast actions let a character act again sooner; slow actions impose a longer delay. This creates meaningful trade-offs between powerful-but-slow abilities and weaker-but-fast ones.
+Fast actions let a character act again sooner; slow actions impose a longer delay. This creates meaningful trade-offs between powerful-but-slow abilities and weaker-but-fast ones. Non-offensive default Actions are faster than Attack to reward tactical decisions — a character who Defends or Searches recovers Initiative faster, making these genuinely competitive with attacking.
 
 ### Combat Resolution Pipeline
 
 All Actions go through a **unified pipeline** with component-driven branching. The pipeline inspects the Action's effect components to determine which steps apply — there is no explicit "action type" flag.
 
 **Step 1: Attack Roll vs. Defense** *(enemy-targeted Damage components only)*
-- Skipped entirely if the Action has no Damage components targeting enemies (heals, buffs, shields skip to Step 3)
+- Skipped entirely if the Action has no Damage components targeting enemies (heals, buffs, shields skip to Step 2)
 - Attacker rolls 1 to [Attack Value]
+- **AoE**: One roll for the entire Action. Each target compares the same roll against their own Defense independently — a high roll may hit all targets, a low roll may miss high-Defense targets but hit low-Defense ones.
 - **Dual Defense**: Defender uses **Physical Defense** or **Magic Defense** based on the Action's **primary damage type**:
   - Physical family (Blunt, Piercing, Slashing) → Physical Defense
   - Elemental family (Fire, Cold, Lightning) → Magic Defense
   - Magical family (Poison, Shadow, Light, Psychic) → Magic Defense
 - Defender's Defense = flat subtraction
-- Result < 0: **Miss** — no further steps for damage, but non-damage effect components (buffs, status) still resolve
-- Result ≥ 0: **Hit** — excess becomes the hit bonus (carried to Step 2)
-- **Primary damage type**: Each Action with Damage components designates a primary damage type that determines which Defense to check. All Damage components in the Action benefit from the same hit/miss result.
+- Result < 0: **Miss** — no damage for this target, but non-damage effect components (buffs, status) still resolve
+- Result ≥ 0: **Hit** — the margin (roll − Defense) becomes the **hit bonus** for this target (used in Step 3)
+- **Primary damage type**: Each Action with Damage components designates a primary damage type that determines which Defense to check. All Damage components in the Action share the same hit/miss result per target.
+- **Friendly fire**: When an `[All]` targeting tag causes an Action to hit allies, the full pipeline applies — allies get a Defense roll, Soak, Resistance, and Shields as normal. See [Friendly Fire Rules](#friendly-fire-rules).
 
 *Example*: 120 Attack vs. 50 Physical Defense → roll 1–120, subtract 50. Results: −49 (miss) to +70 (strong hit). Hit chance ≈ 58%.
 
 **Step 2: Critical Hit Check** *(universal — applies to all effect components)*
 - On a successful hit (or for Actions that skip Step 1), roll against the attacker's Critical Hit Chance
 - Crit chance derived from Physical Crit (40% Awareness + 35% Luck + 25% Accuracy) or Magic Crit (40% Awareness + 35% Luck + 25% Intellect), based on primary damage type
-- **Universal crit**: Crits apply to ALL effect component types. A crit heal heals more, a crit shield is stronger, a crit damage hits harder. Crit adds a bonus amount to each component's output.
+- **Universal crit**: Crits apply to ALL effect component types. A crit heal heals more, a crit shield is stronger, a crit damage hits harder. Crit multiplies each component's output by `(1 + crit_multiplier)`.
+- **Hit bonus is NOT amplified by crit** — it is added separately in Step 3 (see below)
 - **Non-crit**: Proceed to Step 3 with base values
 
 **Step 3: Effect Resolution (Type-Ordered)**
-- Effect components resolve in type order (see [Effect Resolution Order](#effect-resolution-order-within-actions)):
-  1. Status/Buff/Debuff effects (ApplyStatus, RemoveStatus, ModifyStat)
-  2. Damage/Healing effects (Damage, Heal, Shield) — each Damage component resolves independently (see below)
-  3. Movement effects (Move, Summon)
-- **Resistance**: Applies only to **enemy-sourced** effects. Friendly buffs and heals always apply at full strength — allies skip resistance entirely.
-- Each rider effect has its own resolution (e.g., Stunning Blow rolls against Stun Resistance)
-- Status effects that modify Soak or other defensive stats take effect immediately, potentially affecting damage components in the same step
 
-**Step 4: Per-Component Damage Resolution**
-- Each Damage effect component resolves through its **own complete Soak + Shield + Resistance calculation** independently, as if it were a separate hit:
-  - **Base damage**: Defined by the component's `formula` field (weapon attacks reference equipped weapon damage; spell Actions define their own formula). Hit bonus from Step 1 and crit bonus from Step 2 are added.
-  - **Soak**: Per-damage-type Soak with diminishing returns: `Reduction % = Soak[family] / (Soak[family] + K)` where `Soak[family]` is the defender's Soak for the damage component's family (Physical, Elemental, or Magical)
-  - **Penetration**: Universal Penetration reduces the defender's effective Soak (for whichever family applies) before the formula: `Effective Soak = Soak[family] - Penetration` (minimum 0)
-  - **Shield absorption**: Post-Soak damage passes through Shields (see [Shield Mechanics](#shield-mechanics))
-  - **Final Damage**: Applied to Health
-- A "Flame Blade" Action with both Slashing and Fire Damage components resolves Slashing against Physical Soak and Fire against Elemental Soak separately
+Effect components resolve in type order (see [Effect Resolution Order](#effect-resolution-order-within-actions)):
+
+**3a. Status/Buff/Debuff effects** (ApplyStatus, RemoveStatus, ModifyStat)
+- Resistance applies only to **harmful effects from enemies** (see [Friendly Fire Rules](#friendly-fire-rules))
+- Each rider effect has its own resolution (e.g., Stunning Blow rolls against Stun Resistance)
+- Status effects that modify Soak or other defensive stats take effect immediately, potentially affecting damage components in step 3b
+
+**3b. Per-Component Damage Resolution**
+
+Each Damage effect component resolves through its **own complete pipeline** independently:
+
+1. **Base damage** from the component's `formula` field
+2. **Crit multiplier** (if crit from Step 2): `base × (1 + crit_multiplier)`
+3. **Damage modifiers**: buffs, debuffs, attrition ramp bonus
+4. **Hit bonus** added as flat addition to the **primary damage type component only** (NOT amplified by crit or modifiers — raw accuracy reward). Secondary damage components in multi-component Actions do NOT receive the hit bonus. Prevents multi-component Actions from double-dipping on Attack investment.
+5. **Block check**: Roll the defender's equipped shield's Block Chance %. On success, subtract Block Value proportionally across all damage components (see [Block Mechanics](#block-mechanics)). Applies to all damage types.
+6. **Soak reduction**: `Reduction % = Effective_Soak / (Effective_Soak + K)`. Effective Soak = `Soak[family] - Effective_Pen` (min 0). Effective Pen = `Pen × K_pen / (Pen + K_pen)` (diminishing returns).
+7. **Shield absorption**: Post-Soak damage passes through Shield HP pools (see [Shield Mechanics](#shield-mechanics)), FIFO order
+8. **Minimum 1 damage**: Every component that hit deals at least 1 damage after all reductions
+9. **Apply to Health**
+
+*Example*: A "Flame Blade" Action with Slashing + Fire Damage components and primary type Slashing. One attack roll against Physical Defense. If hit, Slashing resolves against Physical Soak and Fire resolves against Elemental Soak independently. Block Value splits proportionally between them.
+
+**3c. Healing effects** (Heal, Shield, ResourceGrant)
+- No Defense or Soak — healing applies directly
+- Crit multiplier applies (a crit heal heals more)
+
+**3d. Movement effects** (Move, Summon)
+- Resolve last
+
+**Off-Hand Bonus Attack**: When dual-wielding or using weapon+focus and the main Action **targets enemies** (has any enemy-targeting component — Damage, debuff, etc.), the off-hand implement fires a **generic Attack** as a completely separate pipeline pass (own hit roll, own crit check, own damage resolution) after the main Action resolves. DW penalties apply (main-hand −15%, off-hand −35% Attack/Damage). Each implement's proc Triggers fire only on its own hits. **Does NOT fire** for non-offensive Actions: heals, self-buffs, Move, Defend, Search. A debuff-only Action targeting enemies DOES trigger the off-hand bonus attack. See [equipment](equipment.md) for full off-hand mechanics.
 
 **Balance Implications**:
 - Unified pipeline: one code path for all Actions, branching based on component presence
 - Per-type Soak with diminishing returns prevents the "armor wall" problem across every damage type
 - Dual Defense (Physical vs Magic) creates a meaningful split between martial and magical attackers
-- Universal Penetration is a single stat that counters Soak regardless of damage type
+- Penetration has diminishing returns, preventing it from zeroing out Soak entirely
 - Universal crit rewards crit investment for healers and support builds, not just attackers
+- Hit bonus rewards Attack investment with raw damage that doesn't benefit from crit amplification
 - Status-before-damage means debuffs applied by the same Action affect its own damage
 - Per-component resolution rewards Actions with diverse damage types — each component hits a potentially different Soak value
-- Allies skip resistance: no counterintuitive buff reduction on your own team
+- Minimum 1 damage per component ensures chip damage always matters
 
 ### Attack & Damage Formulas
 
@@ -235,7 +280,9 @@ The structured format is preferred because it is machine-inspectable (AI Scorers
 **DoT damage bypasses Soak entirely**. When status effects deal damage during the Effects Phase (Burning, Bleeding, Poison ticks), the damage is applied without Soak reduction.
 
 - **Rationale**: DoTs already passed through the Resistance system when initially applied (which reduced their stack count). Double-gating DoTs through both Resistance and Soak would make them too weak to be meaningful.
-- **Shields still absorb DoTs**: Shield HP sits between Soak and Health in the pipeline. Even though DoTs skip Soak, they must still pass through any active Shields before reaching Health. Proactively shielding against DoTs is a valid defensive strategy.
+- **DoTs bypass Block**: DoT tick damage occurs in the Effects Phase, outside the per-component damage pipeline where Block operates. Block only applies to incoming Actions during the Turns Phase.
+- **Shields still absorb DoTs**: Shield HP sits between Soak and Health in the pipeline. Even though DoTs skip Soak and Block, they must still pass through any active Shields before reaching Health. Proactively shielding against DoTs is a valid defensive strategy.
+- **DoT damage path**: DoT tick → Shield absorption → Health (bypasses both Soak and Block).
 - **Resistance still applies at application**: The number of DoT stacks applied is reduced by Resistance when the status is first applied. Once applied, each stack ticks for its full per-stack damage.
 
 ### Passive Detection Timing
@@ -252,13 +299,15 @@ Passive stealth detection happens **before each character's turn** in the Turns 
 The Summon effect component creates **Ephemeral Combatants** (from [characters](characters.md)):
 
 - Summoned entities use the same stat model as all combatants but are not persistent — they exist only for the duration of this combat
-- They have their own Initiative meter and act independently in turn order
+- They have their own Initiative meter starting at **0** and act independently in turn order. Summoning is an investment — fast summons (high Speed) reach their first turn sooner
 - They use preset AI configurations (defined by the summoning Perk/consumable)
 - Team membership matches the summoner
 - **Disappearance**: Summoned entities disappear when killed (enter Fallen) or when their summoner enters Fallen state (end-of-tick Fallen resolution removes both)
 - Summoned entities do NOT trigger post-combat phases (no injury checks, no Perk discovery, no recruitment)
 
 **Summon Control Capacity**: Summoners are limited by a **control capacity budget** — a Resource Pool granted by summoner Traits. Each summoner Trait that enables summoning defines a control capacity pool (e.g., "Necro Control" = 0.8×Willpower + 0.2×Charisma). Each summon type has a **control cost**. The summoner can maintain summons up to their total capacity; dying summons free capacity for new summons. This is a budget-based system, not a per-Perk cap — a summoner with 100 capacity can field five 20-cost skeletons or two 50-cost golems.
+
+**Summon Death Triggers**: When summons are removed (killed or summoner enters Fallen), they fire full trigger events — `OnFallen` on the summon, `OnAllyFallen` on their teammates. This creates potential trigger cascades for summoner builds: a summoner with 5 active summons who enters Fallen generates 5× `OnAllyFallen` events (one for each summon removed) plus the summoner's own `OnFallen`. Content design should account for this cascade potential.
 
 **Revived summoner**: If a summoner is revived mid-combat, their summons remain dead (they were removed during Fallen resolution). The summoner must re-summon using their restored control capacity.
 
@@ -271,6 +320,27 @@ Stun is a status effect that **prevents Initiative gain entirely**:
 - **Decay**: Stun stacks decay by an amount proportional to Willpower per tick (during the Effects Phase, before Initiative Phase)
 - A character with high Willpower recovers from Stun quickly; low Willpower characters may be stunned for many ticks
 - Stun interacts with the one-turn-per-tick rule naturally — a partially stunned character (whose stacks decay to 0 mid-combat) resumes accumulating Initiative from wherever it was
+
+### Friendly Fire Rules
+
+When an Action with an `[All]` targeting tag (e.g., `[All, AoE-Zone]`, `[All, AoE-Map]`) hits allies:
+
+- **Full pipeline applies**: Allies get their own Defense roll, Block check, Soak reduction, Shield absorption, and Resistance — same as enemies. Friendly fire is NOT free damage.
+- **Resistance-skip is for BENEFICIAL effects only**: The "allies skip resistance" rule applies exclusively to beneficial effects — heals, buffs, and positive status effects. Harmful effects from allies (damage, debuffs from friendly fire) go through Resistance normally.
+- **Rationale**: Without this rule, your own AoE would deal MORE damage to allies than to enemies (unresisted). The full pipeline prevents this design bug.
+
+### Block Mechanics
+
+**Block Chance** from equipped shield items (Buckler, Kite Shield, Tower Shield) is a damage reduction layer in the per-component damage pipeline (step 5 of damage resolution):
+
+- **Trigger**: After a successful hit, roll the defender's shield's Block Chance percentage
+- **On block**: Subtract the shield's **Block Value** (flat amount, quality-scaled) from total pre-Soak damage
+- **Proportional split**: Block Value splits proportionally across all damage components in the Action based on their relative magnitudes. A Flame Blade dealing 60% Slashing / 40% Fire has Block Value split 60/40 between them.
+- **All damage types**: Block applies to all damage types (Physical, Elemental, Magical). The shield physically intercepts the attack regardless of damage type.
+- **One check per Action**: Block Chance is rolled once per incoming Action (not per component). If the Block succeeds, the Block Value split applies to all components.
+- **Distinct from Shield HP**: Block Chance is from **equipped shield items** (Buckler/Kite/Tower in a Hand slot). Shield HP pools are from **Perks, consumables, and equipment effects** (the Shield effect component). These are two separate defensive mechanics.
+
+See [equipment](equipment.md) for Block Chance and Block Value per shield type.
 
 ### Shield Mechanics
 
@@ -289,11 +359,12 @@ Shields are a **second defense layer** that absorbs damage after per-type Soak r
 
 When an Action contains multiple effect components, they are resolved in **type order**, not simultaneously:
 
-1. **Status/Buff/Debuff effects**: ApplyStatus, RemoveStatus, ModifyStat components resolve first
-2. **Damage/Healing effects**: Damage, Heal, Shield components resolve second
+0. **Revive effects**: Revive components resolve first, before all other effects. This ensures hybrid heal+revive Actions work naturally: Revive brings the Fallen ally back (with clean slate — all statuses cleared), then subsequent buff and heal components apply to the now-living character.
+1. **Status/Buff/Debuff effects**: ApplyStatus, RemoveStatus, ModifyStat components resolve second
+2. **Damage/Healing effects**: Damage, Heal, Shield components resolve third
 3. **Movement effects**: Move, Summon components resolve last
 
-This means a single Action can debuff a target's Soak and then deal damage against the reduced Soak in the same use. Components within the same type category resolve simultaneously (no ordering within a category).
+This means a single Action can debuff a target's Soak and then deal damage against the reduced Soak in the same use. Components within the same type category resolve simultaneously (no ordering within a category). Revive at Step 0 ensures that a hybrid Revive+Buff+Heal Action first revives (clearing all statuses), then applies fresh buffs, then heals — the revived character receives full benefit.
 
 **Note**: This overrides the traits-and-perks spec's "simultaneous effect resolution within Actions" rule. The traits-and-perks spec references this spec for the authoritative resolution order.
 
@@ -321,35 +392,63 @@ This means a single Action can debuff a target's Soak and then deal damage again
 
 **Stack-Based Mechanics**:
 - Max stacks: 9999 (effectively unlimited)
-- **Minimum stacks**: Status effects always apply at least **1 stack**, even after Resistance reduction. Resistance can reduce 10 stacks to 1, but never to 0. This ensures status effects remain a reliable (if weakened) offensive tool.
-- Decay: Variable per status type. **Frozen while Fallen**: status effects do **not** tick down while a character is in the Fallen state. If a Fallen character is revived, their status effects resume from where they were.
-- Application: From rider effects, Triggers, environmental hazards, Perks
+- **Minimum stacks**: Status effects always apply at least **1 stack**, even after Resistance reduction. Resistance can reduce 10 stacks to 1, but never to 0. This is an absolute rule with **no exceptions** — there is no "immunity" mechanic. High Resistance + fast decay provides functional near-immunity (1 stack that decays instantly).
+- **Additive stacking**: New applications of the same status type **add stacks** to the existing count. A character with 5 stacks of Burning hit with 3 more stacks has 8 stacks. No separate duration tracking.
+- **Stacks ARE duration**: There is no separate duration field. Each status type defines a **per-tick decay formula** that reduces stacks each tick. When stacks reach 0, the status is removed.
+- **Frozen while Fallen**: Status effects do **not** tick down while a character is in the Fallen state. Revival clears all statuses (clean slate).
+- **Character status tracking**: Just `{status_type, current_stacks}` — minimal data per active status.
+
+**Status Decay Model**:
+
+Each status type defines a decay formula evaluated per tick during the Effects Phase. The formula determines how many stacks are removed:
+
+```
+status_type_definition: {
+  name: "Burning",
+  decay_formula: <formula>,          // stacks removed per tick
+  per_stack_effect: { ... },         // effect per stack per tick
+  special_decay: null                // optional: "per_health_restored", "on_turn_start", etc.
+}
+```
+
+Decay formulas can be:
+- **Percentage**: `current_stacks × rate` (e.g., Burning: 25% per tick → 10→7→4→2→1→0). Ceiling rounding applies to decay removal: `ceil(10×0.25) = 3` stacks removed first tick, `ceil(7×0.25) = 2` next, etc. This makes percentage-decay statuses shorter-lived than they appear — Burning clears in 5 ticks, not 8.
+- **Attribute-derived**: `Attribute / divisor` (e.g., Stun: `Willpower / 10` stacks removed per tick)
+- **Flat**: Fixed amount per tick (e.g., Regeneration: lose 2 stacks per tick)
+- **Special**: Custom conditions (e.g., Bleeding: lose 1 stack per Health restored; Defending: clears on turn start)
+
+All decay results use **ceiling rounding** — even fractional removal rounds up to at least 1. This ensures statuses always decay and never get "stuck."
+
+**No True Immunity**: There are no immunity Perks that prevent status application. Defense against powerful statuses comes from:
+1. High Resistance (reduces applied stacks, minimum 1)
+2. Fast decay (high Willpower for Stun, etc.)
+3. The combination: 1 stack of Stun with Willpower 100 decays within the same tick — functionally zero impact.
 
 **Resistance Model**:
 - Status effects **always apply** — there is no binary resist/fail roll
 - Resistance reduces the **number of stacks applied** AND **damage of that damage type**
-- **Enemy-sourced only**: Resistance applies only to effects from enemy sources. Friendly buffs, heals, and beneficial status effects **always apply at full strength** — allies skip resistance entirely
+- **Harmful enemy effects only**: Resistance applies only to harmful effects from enemy sources. Beneficial effects from allies (heals, buffs, positive statuses) always apply at full strength. Harmful effects from allies (friendly fire) go through Resistance normally (see [Friendly Fire Rules](#friendly-fire-rules)).
 - Per-type resistance: characters can have different resistance values for different status/damage types
-- Resistance is tunable per-status-type — some statuses may weight resistance more toward stack reduction, others toward damage reduction
 - Sources: Attributes (e.g., Willpower for mental statuses), Perks, equipment, other status effects
 
 **Resistance Formulas** (percentage with diminishing returns — parallels Soak formula):
-- **Stack reduction**: `stacks_applied = base_stacks × (1 - resist_ratio)` where `resist_ratio = Resistance / (Resistance + K)`. Minimum 1 stack always applies (see above).
-- **Damage reduction**: `damage × (1 - resist_ratio)` using the **same formula and same K** per damage/status type.
-- Both use the same diminishing returns curve as Soak. Higher Resistance is always valuable but never grants immunity. K is a per-type tuning constant.
+- **Stack reduction**: `stacks_applied = ceil(base_stacks × (1 - resist_ratio))` where `resist_ratio = Resistance / (Resistance + K)`. Minimum 1 stack always applies.
+- **Damage reduction**: `ceil(damage × (1 - resist_ratio))` using the **same formula and same K** per damage/status type.
+- Both use the same diminishing returns curve as Soak and Penetration. Higher Resistance is always valuable but never grants immunity. K is a per-type tuning constant.
 
-*Example*: An attack applies 10 stacks of Burning. The defender has Fire Resistance 40 with K=50. `resist_ratio = 40/(40+50) = 0.44`. Stacks applied = `10 × (1 - 0.44) = 5.6 → 6 stacks` (rounded). Fire damage taken is reduced by 44%.
+*Example*: An attack applies 10 stacks of Burning. The defender has Fire Resistance 40 with K=50. `resist_ratio = 40/(40+50) = 0.44`. Stacks applied = `ceil(10 × 0.56) = ceil(5.6) = 6 stacks`. Fire damage taken is reduced by 44%.
 
 **Status Examples** (numbers are tuning targets, not final):
 
-| Status | Effect | Decay Model |
-|--------|--------|-------------|
-| Stun | **Prevents** Initiative gain entirely (0 gain while stacks > 0) | Decays by Willpower per tick |
-| Burning | Fire DoT per tick | Fixed per-tick reduction |
-| Bleeding | Physical DoT | Exotic: reduces by 1 per Health restored |
-| Slow | Reduces Initiative gain (temporary channel) | Fixed duration or per-tick |
+| Status | Per-Stack Effect | Decay Formula |
+|--------|-----------------|---------------|
+| Stun | Prevents Initiative gain (0 gain while stacks > 0) | `Willpower / 10` stacks per tick |
+| Burning | Fire DoT per tick | `current_stacks × 0.25` per tick |
+| Bleeding | Physical DoT per tick | Special: 1 stack per Health restored |
+| Slow | Reduces Initiative gain multiplier | `current_stacks × 0.20` per tick |
+| Defending | % boost to Defense + Soak | Special: clears on turn start |
 | Sneaking | Cannot be targeted — see Stealth | Broken by conditions (see Stealth) |
-| Buff/Debuff | Stat modifications | Various decay rates |
+| Buff/Debuff | Stat modifications | Varies per status definition |
 
 ### Stealth & Detection
 
@@ -363,9 +462,9 @@ This means a single Action can debuff a target's Soak and then deal damage again
   - Being detected by an enemy does NOT automatically break Sneaking — it only allows that enemy to target the Sneaking character
 
 **Detection System** (dual-mode):
-- **Passive Detection**: Automatic, same-zone only. Each tick, characters automatically attempt to detect Sneaking enemies in their zone using their Awareness stat. No action cost.
-- **Active Detection (Search)**: A deliberate Action that searches the entire map. Detection chance decreases with range: same zone (high), adjacent zones (moderate), distant zones (low). Costs the character's full turn (default Action via Combatant Trait).
-- **Detection result**: Successfully detecting a Sneaking character allows the detector (and their team) to target that character. Detection does not remove the Sneaking status — the Sneaking character retains other stealth benefits (damage break chance, etc.).
+- **Passive Detection**: Automatic, same-zone only. Before each character's turn, passive detection re-rolls against Sneaking enemies in their zone using Awareness. No action cost. **Per-turn only** — there is no persistent "this team has detected character X" state between turns. A character who detects a stealth enemy can target them during their turn only; teammates who act later in the same tick must make their own detection checks.
+- **Active Detection (Search)**: A deliberate Action that searches the entire map. Detection chance decreases with range: same zone (high), adjacent zones (moderate), distant zones (low). Costs the character's turn but has Action Speed +50 (only −50 Initiative cost). Same per-turn detection persistence — Search results apply to the searching character's turn only.
+- **Detection result**: Successfully detecting a Sneaking character allows the detector to target that character during their turn. Detection does not remove the Sneaking status — the Sneaking character retains other stealth benefits (damage break chance, etc.).
 
 ### Targeting
 
@@ -414,7 +513,9 @@ Soak is **per-damage-type**, using three family-level base formulas. Types withi
 
 **Soak formula**: `Reduction % = Soak[family] / (Soak[family] + K)` where K is a global tuning constant. Higher Soak is always valuable but never grants immunity.
 
-**Penetration**: Universal — one Penetration stat applied against whatever family Soak is being checked. `Effective Soak = Soak[family] - Penetration` (minimum 0). Penetration does NOT affect Shields (only reduces Soak).
+**Penetration**: Universal — one Penetration stat with **diminishing returns** applied against whatever family Soak is being checked. `Effective Soak = Soak[family] - Effective_Pen` (minimum 0), where `Effective_Pen = Pen × K_pen / (Pen + K_pen)` (K_pen is a tuning constant). Same harmonic diminishing returns shape as Soak — high Penetration is always valuable but can never fully zero out Soak. Penetration does NOT affect Shields (only reduces Soak).
+
+*Example with K_pen=100*: Pen 20 → Effective 17. Pen 50 → 33. Pen 100 → 50. Pen 200 → 67. Penetration asymptotically approaches K_pen.
 
 **Per-type bonuses**: Tag-scoped Stat Adjustments (e.g., "+5 Soak vs [Fire]") add to the family base for specific damage types. A character with 50 Elemental Soak and "+10 Soak vs [Fire]" has effective 60 Soak against Fire but 50 against Cold and Lightning.
 
@@ -529,7 +630,7 @@ The Combatant Trait contains a single Perk with the default Actions (Attack, Def
 - **Fallen Resolution is a pure HP check**: At the end of each tick (step 4), the system checks whether HP < 1. If a character was reduced below 0 HP earlier in the tick but was healed back above 0 HP before step 4 (by an ally's Action, a self-heal on a Dying Blow turn, or a Trigger), they are **not** Fallen. Healing saves from Fallen.
 - **Self-save via Dying Blow**: A character at ≤0 HP who takes their turn (Dying Blow) can use a self-heal Action. If the heal brings them above 0 HP before Fallen Resolution, they survive. Consistent rules — no special cases.
 - **Revival**: Fallen characters **can** be revived mid-combat via Perks, consumables, or rare equipment effects. A revived character returns at a fraction of their maximum Health (exact fraction is a tuning value).
-- **Revival: clean slate**: All status effects are cleared on revival. The revived character starts fresh — no lingering debuffs, DoTs, or buffs. Only the fractional HP remains from the pre-Fallen state.
+- **Revival: true clean slate**: **ALL** status effects are cleared on revival — both beneficial and harmful. There is no "buff vs debuff" classification; revival is a complete reset. Buffs applied before falling are lost. Hybrid revive+buff Actions work by applying fresh buffs AFTER the clean slate (via the type-ordered resolution: Revive Step 0 → Status Step 1). The revived character starts fresh — only the fractional HP remains from the pre-Fallen state.
 - **Fallen Resolution order**: Characters enter Fallen in **reverse Initiative order** (lowest Initiative first). `OnFallen` Triggers fire sequentially in this order. This means higher-Initiative characters' Fallen Triggers resolve last, which can matter for chain reactions.
 - **Status decay frozen while Fallen**: Status effects do not tick down while a character is in the Fallen state. If revived, statuses resume from where they were (but see "clean slate" above — revival clears all statuses, so this only matters for effects that occur between Falling and potential Revival within the same tick).
 - **Overkill**: The amount of excess damage beyond 0 HP is tracked. Overkill = `abs(final_HP)` regardless of damage source — DoTs, direct damage, and environmental effects all contribute. Overkill magnitude affects injury severity in the post-combat injury roll — massive overkill increases the chance and severity of injuries.
@@ -596,6 +697,8 @@ Zone-targeted effects (e.g., "create a fire zone that damages everyone inside") 
 
 Fighters have a Morale value affected by combat events. Low Morale may cause debuffs, fleeing, or refusal to act. High Morale may grant bonuses. Full design TBD.
 
+**Crowd Appeal**: The derived stat (60% Charisma + 25% Luck + 15% Awareness, from [characters](characters.md)) is part of the Morale system, deferred to Phase 4. For MVP, Crowd Appeal exists as a derived stat with no mechanical combat effect.
+
 ---
 
 ## Canonical Vocabularies
@@ -608,7 +711,9 @@ See [Targeting](#targeting) above for the MVP target tag set and resolution rule
 
 ### Trigger Event Types
 
-The authoritative list of events that can fire Perk Triggers:
+The authoritative list of events that can fire Perk Triggers.
+
+**Trigger Recursion Guard**: Triggers can chain — a Trigger's effect can cause other Triggers to fire, which can chain further. However, each individual Trigger instance can fire **at most once per originating event**. Implementation: maintain a "fired set" per originating event; skip Triggers already in the set. This prevents infinite loops while allowing complex chains (e.g., OnHit → ApplyBurning → OnStatusApplied → bonus damage → OnDamageDealt → ..., but each Trigger fires at most once).
 
 **Combat Flow Events:**
 - `OnCombatStart` — at the beginning of combat (before first tick)
@@ -627,15 +732,29 @@ The authoritative list of events that can fire Perk Triggers:
 - `OnCritBy` — when this character is hit by a critical hit
 
 **Damage Events:**
-- `OnDamageDealt` — when this character deals damage (after Soak reduction)
-- `OnDamageTaken` — when this character takes damage
-- `OnOverkill` — when this character's attack reduces a target below 0 HP
+- `OnDamageDealt` — when this character deals damage (after Soak reduction). Fires immediately during the Action.
+- `OnDamageTaken` — when this character takes damage. Fires immediately during the Action.
 
-**Kill/Fall Events:**
-- `OnKill` — when this character drops an enemy to Fallen
-- `OnAllyFallen` — when a friendly character falls in combat
-- `OnFallen` — when this character enters the Fallen state
-- `OnDyingBlow` — when this character takes an Action while at ≤0 HP (before end-of-tick Fallen resolution)
+**Kill/Fall Events** (deferred — see [Deferred Kill Trigger Model](#deferred-kill-trigger-model)):
+- `OnKill` — when this character drops an enemy to Fallen (fires in Step 5, not immediately). Event payload includes overkill value data.
+- `OnAllyFallen` — when a friendly character falls in combat (fires in Step 5)
+- `OnFallen` — when this character enters the Fallen state (fires in Step 5)
+- `OnDyingBlow` — when this character takes an Action while at ≤0 HP (before end-of-tick Fallen resolution). Fires immediately during the Action.
+
+**Revival Events:**
+- `OnRevive` — when this character is revived (fires during Step 0 of effect resolution, immediate trigger). Fires on the revived character.
+
+**Defense Events:**
+- `OnBlock` — when this character's shield item successfully blocks (fires at pipeline step 5, joins Action trigger collection)
+- `OnShieldBreak` — when a Shield HP pool on this character reaches 0 (fires at pipeline step 7, joins Action trigger collection)
+- `OnDodge` — when this character successfully dodges an enemy attack (defender's perspective on a miss, roll < 0). Symmetric with OnMiss. Fires as part of the Action's trigger collection.
+
+**Healing Events:**
+- `OnHeal` — when this character heals an ally (healer's perspective, symmetric with OnDamageDealt). Fires immediately during the Action.
+- `OnHealedBy` — when this character receives healing from any source (symmetric with OnDamageTaken). Fires immediately during the Action.
+
+**Summon Events:**
+- `OnSummon` — when this character creates a summon via the Summon effect component. Fires immediately during the Action.
 
 **Status Events:**
 - `OnStatusApplied` — when a status effect is applied to this character
@@ -652,6 +771,27 @@ The authoritative list of events that can fire Perk Triggers:
 **Stealth Events:**
 - `OnStealthBreak` — when this character's Sneaking status is broken
 - `OnDetect` — when this character detects a Sneaking enemy
+
+### Trigger Timing Rules
+
+Triggers fire at different points depending on their type:
+- **Immediate triggers** (fire during the Action): `OnHit`, `OnCrit`, `OnMiss`, `OnHitBy`, `OnCritBy`, `OnDamageDealt`, `OnDamageTaken`, `OnDyingBlow`, `OnBlock`, `OnShieldBreak`, `OnDodge`, `OnHeal`, `OnHealedBy`, `OnSummon`, `OnStatusApplied`, `OnStatusExpired`, `OnResourceDepleted`, `OnStaminaExhausted`, `OnMove`, `OnForcedMove`, `OnStealthBreak`, `OnDetect`. These fire as part of the Action's trigger collection (batch-then-triggers model for AoE).
+- **Revive trigger**: `OnRevive` fires during Step 0 of effect resolution as an immediate trigger on the revived character.
+- **Kill triggers** (deferred): `OnKill`, `OnFallen`, `OnAllyFallen` fire in Step 5 of tick resolution (after Fallen Resolution). See [Deferred Kill Trigger Model](#deferred-kill-trigger-model).
+- **Flow triggers**: `OnCombatStart`, `OnCombatEnd`, `OnTickStart`, `OnTurnStart`, `OnTurnEnd` fire at their named points in the combat flow.
+
+### Deferred Kill Trigger Model
+
+Kill-related triggers (`OnKill`, `OnFallen`, `OnAllyFallen`) use a **deferred trigger queue** rather than firing immediately:
+
+1. **During Actions**: When a target is reduced to HP < 0, the potential kill is recorded with the causing Action and character. The kill trigger does NOT fire yet.
+2. **Step 4 (Fallen Resolution)**: Characters who actually have HP < 1 at tick end are confirmed as Fallen. Characters who were reduced below 0 HP but healed back above 0 before Step 4 do NOT generate kill triggers.
+3. **Step 5 (Kill Triggers)**: Confirmed kill triggers fire as a batch. Each kill event tracks the causing Action for attribution. AoE kills from the same Action share a batch.
+4. **Recursion guard**: Each kill in Step 5 is a separate originating event for trigger chain purposes (the standard per-event "fired set" applies independently per kill).
+
+**Why deferred?** Immediate OnKill during Actions would fire for targets at HP < 0 who might later be healed back above 0 before Fallen Resolution — creating false kills. Deferring to Step 5 ensures kill triggers only fire for characters who actually enter Fallen.
+
+**Interaction with other triggers**: `OnHit`, `OnDamageDealt`, and all other Action-phase triggers still fire immediately during the Action (unchanged). Only kill-related triggers are deferred.
 
 ### Effect Component Types
 
@@ -676,6 +816,43 @@ New types can be added without schema changes — the list format is inherently 
 **Resolution within Actions**: Effect components resolve in type order (see [Effect Resolution Order Within Actions](#effect-resolution-order-within-actions)).
 
 **Level Scaling**: All numeric output values scale with Perk/Trait level multipliers. Resource costs, cooldowns, and requirements stay flat.
+
+---
+
+## Equipment Combat Mechanics (Cross-Reference)
+
+Several combat-time mechanics are defined in [equipment](equipment.md) and affect combat resolution. This section lists them for implementers; see the equipment spec for full details.
+
+| Mechanic | Summary | See Equipment Spec |
+|----------|---------|-------------------|
+| **Implement Resolution** | Actions specify physical or magical implement type. Resolution order: main-hand → off-hand → default (Unarmed/Unfocused). | Hand Slots & Implements |
+| **Off-Hand Bonus Attack** | Enemy-targeted Actions (damage, debuff) trigger a generic Attack from the off-hand implement as a sequential second pipeline pass. Does NOT fire for heals, self-buffs, Move, Defend, Search. DW penalties: main-hand −15%, off-hand −35% Attack/Damage. | Off-Hand Bonus Attack |
+| **Dual-Wield Penalties** | Main-hand −15% Attack/Damage, off-hand −35%. Raw DW ≈ 75% output. Perks (Ambidextrous, Two-Weapon Fighting) mitigate. | Dual-Wield |
+| **Armor Speed Penalties** | Medium armor: −2 Speed per piece. Heavy armor: −5 Speed per piece. Full Heavy = −30 Speed. **Mitigated by Might** (see below). | Armor Types |
+| **Might Armor Speed Mitigation** | `effective_penalty = base_penalty × (1 - Might/(Might+K))`. High Might reduces armor Speed penalties. See below. | (Defined here) |
+| **Versatile Mode** | Versatile weapons auto-switch between one-hand and two-hand stat profiles based on off-hand occupancy. | Wielding Modes |
+| **Equipment Combat Lock** | Equipment snapshotted at combat start for all fight types. No mid-combat gear swaps. Degradation calculated post-combat. | Equipment Combat Lock |
+| **Default Attack Adaptation** | Single Attack Action adapts to main-hand implement: weapon → physical, focus → magical, empty → Unarmed. | Default Attack Adaptation |
+| **Multihit Targeting** | Implements with the Multihit tag change the default Attack to hit 1–5 random enemies in the target zone (triangular distribution). One attack roll, per-target Defense check. | Implement Tags |
+| **Reach Range Extension** | Reach-tagged weapons can attack at Medium range (extending from Short) with an Accuracy penalty (~20% Attack Value reduction at Medium). | Weapon Types |
+| **Ranged Short Penalty** | Ranged-tagged weapons attack at Long range by default. ~20% Attack Value Accuracy penalty when used at Short range. | Weapon Types |
+| **Block Chance** | Shield items (Buckler/Kite/Tower) provide Block Chance % and Block Value in the damage pipeline. See [Block Mechanics](#block-mechanics). | Shields |
+| **Implement Tags** | Deadly (+crit, per-implement), Sunder (+Penetration, per-implement), Defend (+Physical Defense, passive), Deflect (+Magic Defense, passive), Multihit (AoE default Attack). | Implement Tags |
+
+### Might Armor Speed Mitigation
+
+Might reduces the Speed penalty from Medium and Heavy armor using the same diminishing returns formula used throughout the combat system:
+
+```
+effective_penalty = base_penalty × (1 - Might / (Might + K_armor))
+```
+
+Where `K_armor` is a tuning constant. This creates a natural Might + Heavy Armor synergy:
+- A high-Might warrior in full Heavy armor (base −30 Speed) with Might 150 and K=100 reduces the penalty to about −12
+- A low-Might mage in the same armor would suffer nearly the full −30 penalty
+- Thematic: strong fighters wear heavy gear efficiently; mages are pushed toward Light armor
+
+This gives Might a unique combat niche beyond weapon damage — it's the "I can wear heavy armor effectively" stat.
 
 ---
 
@@ -991,11 +1168,12 @@ New types can be added without schema changes — the list format is inherently 
 - **Rationale**: One hit roll per Action keeps combat resolution fast. The primary type reflects the Action's "flavor" — a Flame Blade is primarily a physical attack enhanced with fire, so it checks Physical Defense. Content authors choose the primary type to match the Action's theme.
 - **Implications**: Action data model gains a `primary_damage_type` field (required when Action has Damage components). Content authoring must specify primary type for mixed-damage Actions.
 
-### Universal Penetration
+### Universal Penetration with Diminishing Returns
 
-- **Decision**: Penetration is a single universal stat. When checking Soak, Penetration reduces the relevant family Soak regardless of damage type: `Effective Soak = Soak[family] - Penetration` (minimum 0).
-- **Rationale**: One Penetration value is simpler to track and invest in. Per-type or per-family Penetration would create 3-10 separate stats. Universal Penetration is a clean "armor piercing" stat that benefits all damage output.
-- **Implications**: Equipment affixes that grant Penetration are universally valuable. A character with high Penetration is effective against all Soak types. Balance: Penetration is powerful because it reduces whichever Soak applies — content should price it accordingly.
+- **Decision**: Penetration is a single universal stat with **diminishing returns**: `Effective_Pen = Pen × K_pen / (Pen + K_pen)`. The effective value is then subtracted from Soak: `Effective Soak = Soak[family] - Effective_Pen` (minimum 0). Same harmonic formula shape as Soak and Resistance.
+- **Rationale**: Flat Penetration without diminishing returns could completely zero out Soak at high values, creating a balance problem. Diminishing returns on Penetration match the DR on Soak, creating a symmetrical offensive-defensive investment curve. One Penetration value is simpler to track than per-type or per-family.
+- **Implications**: Equipment affixes granting Penetration are valuable but with diminishing returns — the first 50 points of Penetration are much more impactful than going from 150 to 200. K_pen is a tuning constant that caps the maximum effective Penetration.
+- **Alternatives considered**: Flat subtraction (rejected — allowed complete Soak bypass at high values), percentage-based Penetration (rejected — different semantic from the existing flat model).
 
 ### Universal Critical Hits
 
@@ -1208,11 +1386,233 @@ New types can be added without schema changes — the list format is inherently 
 - **Rationale**: Allowing Revive on any target (with no-op on living allies) enables versatile hybrid Actions without requiring separate "heal" and "revive" versions. A single "Healing Light" Action with Heal + Revive components can serve both purposes. The `[Fallen]` target tag still exists for dedicated Revive-only Actions that should only be used on Fallen allies.
 - **Implications**: AI must evaluate hybrid heal+revive Actions for both living and Fallen ally targets. Content authors can create versatile support Actions that combine healing and revival. The `[Fallen]` tag remains for Actions that should exclusively target Fallen allies.
 
+### Numeric System: Ceiling Integer Rounding
+
+- **Decision**: All combat values are integers. All fractional results use ceiling rounding (round up). Minimum 1 damage per component on successful hits. Minimum 1 stack on all status applications.
+- **Rationale**: Ceiling rounding favors attackers — even tiny damage deals at least 1. Consistent with minimum 1 stack philosophy. Integer-only values simplify implementation and player reasoning.
+- **Implications**: All formula evaluations produce integers via ceiling. Damage, healing, Initiative gain, status decay, Soak reduction — everything is integers.
+
+### Block Chance in Combat Pipeline
+
+- **Decision**: Block Chance from equipped shield items (Buckler, Kite Shield, Tower Shield) is integrated into the per-component damage resolution pipeline between damage modifiers and Soak reduction (step 5 of 9). Block applies to all damage types, splits proportionally across multi-component damage.
+- **Rationale**: Block as a pre-Soak flat reduction makes it especially effective against weaker hits (removing a larger percentage of damage before Soak's diminishing returns apply). Proportional split prevents gaming by component ordering. All-type blocking is thematic — the shield physically intercepts the attack.
+- **Implications**: Two separate "shield" mechanics in the system: Block Chance (from equipment shield items, flat reduction) and Shield HP (from Perks/consumables, absorption pool). Equipment spec defines Block Chance/Value per shield type; combat spec defines pipeline position.
+
+### Off-Hand Bonus Attack as Sequential Second Pass
+
+- **Decision**: When dual-wielding or using weapon+focus, the main Action resolves through the full pipeline, then the off-hand fires a generic Attack as a completely separate pipeline pass (own hit roll, own crit check, own Block, own Soak). Each implement's proc Triggers fire only on its own hits.
+- **Rationale**: Two separate Actions is clean and consistent — no special cases in the pipeline. Per-implement Trigger firing creates interesting build choices. DW penalties (-15%/-35%) ensure the bonus attack doesn't make dual-wielding dominant.
+- **Implications**: Every dual-wield turn produces two separate damage events in the combat log. AI must evaluate off-hand bonus value. Shields are more effective against dual-wielders (two Block checks per turn).
+
+### Friendly Fire: Full Normal Pipeline
+
+- **Decision**: When Actions with `[All]` targeting tags hit allies (friendly fire), the full combat pipeline applies — Defense roll, Block, Soak, Resistance, Shields. The "allies skip resistance" rule applies ONLY to beneficial effects (heals, buffs, positive statuses), not to friendly fire damage.
+- **Rationale**: Without this rule, a character's own AoE would deal MORE damage to allies than to enemies (unresisted damage). The full pipeline prevents this design bug while keeping beneficial effects reliable.
+- **Implications**: Effect source tracking needs to distinguish beneficial vs harmful effects, not just ally vs enemy. AI `aoe_net_value` Scorer accounts for friendly fire pipeline correctly.
+
+### Additive Status Stacking with Formula-Based Decay
+
+- **Decision**: New status applications add stacks to existing stacks (additive). No separate duration tracking — stacks ARE the duration. Each status type defines a per-tick decay formula (percentage, flat, or attribute-derived). Character status tracking is minimal: `{status_type, current_stacks}`.
+- **Rationale**: Eliminates the complexity of duration timers. Percentage decay creates natural exponential falloff. Attribute-derived decay (e.g., Stun → Willpower) ties defensive stats to status recovery. Ceiling rounding ensures statuses always decay (last stack always clears).
+- **Implications**: Status type definitions gain a `decay_formula` field using the standard formula representation. Content defines per-status decay behavior. Multiple sources of the same status stack naturally.
+
+### Penetration Diminishing Returns
+
+- **Decision**: Penetration uses the same harmonic diminishing returns formula as Soak: `Effective_Pen = Pen × K_pen / (Pen + K_pen)`. The effective value subtracts from Soak. Same formula shape everywhere in the system.
+- **Rationale**: Flat Penetration without DR could completely zero out Soak at high values. Harmonic DR creates system consistency — one formula shape for Soak, Resistance, and Penetration.
+- **Implications**: K_pen is a new tuning constant. Penetration affixes need rebalancing for DR. First 50 points of Penetration are much more impactful than going from 150 to 200.
+
+### Defend Boosts All Defenses, No Tick Limit
+
+- **Decision**: Defend boosts both Physical and Magic Defense, plus all 3 Soak families (Physical, Elemental, Magical). No maximum tick duration — persists until the character's next turn. Implemented as the "Defending" status (1 stack, special decay: clears on turn start).
+- **Rationale**: A general defensive brace should protect against all attack types. The stun+Defend interaction (indefinite defense while stunned) is accepted as thematic — a braced character who gets stunned is harder to kill while helpless. Content balances stun duration.
+- **Implications**: Defend is a status effect using the standard stack-based system. No special mechanic needed.
+
+### Trigger Chaining with Recursion Guard
+
+- **Decision**: Triggers can chain — a Trigger's effect can fire other Triggers, which can chain further. Each individual Trigger instance fires at most once per originating event (recursion guard).
+- **Rationale**: Unlimited chaining enables complex "combo chain" Perks (OnHit → apply Burning → OnStatusApplied → bonus damage). The recursion guard prevents infinite loops without limiting creative content design.
+- **Implications**: Implementation maintains a "fired set" per originating event. Content authors can create chain-enabling Perks. Performance: chain depth is bounded by the total number of unique Triggers on the affected characters.
+
+### Summon Starting Initiative: Zero
+
+- **Decision**: Summoned Ephemeral Combatants start with Initiative = 0 and accumulate from scratch.
+- **Rationale**: Summoning is a long-term investment, not instant payoff. High-Speed summons (wolves, elementals) reach their first turn faster than slow summons (golems). Simple rule consistent with default starting Initiative.
+- **Implications**: Summoner build evaluation must account for summon ramp-up time. AI factors Initiative ramp into summon decision timing.
+
+### No True Status Immunity
+
+- **Decision**: There are no immunity Perks. Minimum 1 stack always applies with no exceptions. Defense against powerful statuses comes from high Resistance (reduces to 1 stack) + fast decay (attribute-derived formula clears quickly). Functionally zero impact from 1 stack that decays in the same tick.
+- **Rationale**: Removing the immunity concept simplifies the system. The combination of minimum-1-stack + fast-decay provides the same gameplay outcome (negligible status impact) without a separate binary immunity mechanic. No special cases in status application.
+- **Implications**: Removes mentions of "Stun immunity Perks" from the spec. High-Willpower characters are effectively stun-proof through fast decay, not through a separate immunity gate.
+
+### Hit Bonus: Post-Modifier Flat Addition
+
+- **Decision**: The hit margin (roll − Defense) is added to damage AFTER crit multiplier and damage modifiers but BEFORE defensive reductions (Block, Soak, Shield). Hit bonus is NOT amplified by crit or buffs — it's raw accuracy reward. Defenses still reduce it.
+- **Rationale**: Attack Value intentionally double-dips (hit chance AND damage scaling), creating high per-hit variance. This is the intended combat feel — a great attack roll is both accurate and powerful. Applying hit bonus post-crit prevents crit from amplifying accuracy reward.
+- **Implications**: High Attack investment is very powerful. The 9-step per-component damage pipeline explicitly orders hit bonus at step 4.
+
+### AoE: One Roll, Per-Target Defense
+
+- **Decision**: For AoE Actions, the attacker rolls once (1 to Attack Value). Each target subtracts their own Defense from that single roll independently. A high roll hits everyone; a low roll may miss high-Defense targets but hit low-Defense ones. Hit bonus varies per target.
+- **Rationale**: "One swing" is thematic and faster to resolve. Per-target Defense comparison means the same attack can hit some targets and miss others based on individual defenses — creates interesting AoE outcomes.
+- **Implications**: One roll per AoE Action, not per target. Each target gets an independent hit/miss result and hit bonus. Multihit (from implement tags) follows the same rule.
+
+### Might Mitigates Armor Speed Penalties
+
+- **Decision**: Might reduces Medium/Heavy armor Speed penalties using the harmonic diminishing returns formula: `effective_penalty = base_penalty × (1 - Might/(Might+K_armor))`. K_armor is a tuning constant.
+- **Rationale**: Gives Might a unique combat niche beyond weapon damage — it's the "I can wear heavy armor effectively" stat. Creates natural Might + Heavy Armor synergy. Thematic: strong fighters bear heavy gear; mages are pushed toward Light armor.
+- **Implications**: Might description in characters spec needs updating. Equipment spec's armor Speed penalty section gains a cross-reference. K_armor is a new tuning constant. A high-Might warrior in full Heavy armor (base −30 Speed) might reduce the penalty to about −12.
+
+### Equipment Combat Mechanics Cross-Reference
+
+- **Decision**: Combat spec gains an "Equipment Combat Mechanics" cross-reference section listing all equipment-originated combat effects (DW penalties, armor Speed penalties, implement resolution, Versatile mode, Multihit, equipment combat lock, Reach/Ranged, Block, implement tags) with links to equipment spec for details.
+- **Rationale**: Implementation teams can find all combat-relevant mechanics from one document without duplicating content. Equipment spec remains the authoritative source for equipment details; combat spec provides navigability.
+- **Implications**: Combat spec is the "starting point" for combat implementation; equipment spec provides equipment-specific detail.
+
+### Status Decay: Ceiling Rounding Shortens Durations (#121)
+
+- **Decision**: Ceiling rounding applies to decay removal, making percentage-decay statuses shorter-lived than they appear. Burning 25% decay: `ceil(10×0.25)=3` removed → 10→7→4→2→1→0 (5 ticks, not 8).
+- **Rationale**: Consistent with the global ceiling rounding rule. Ceiling on decay removal favors status recovery — statuses clear faster than naive calculation suggests. This is intentional: it balances the minimum-1-stack rule on application.
+- **Implications**: Content authors must use the ceiling-corrected decay sequence when designing status durations. A "25% decay" status clears in roughly `ceil(log(stacks) / log(1/0.75))` ticks.
+
+### Default Action Speeds: Non-Offensive Actions Are Faster (#122)
+
+- **Decision**: Default Action Speeds: Attack = 0 (−100 Initiative), Move = +25 (−75), Defend = +25 (−75), Search = +50 (−50). Non-offensive actions are faster than Attack.
+- **Rationale**: Non-offensive default Actions should be competitive with attacking. Search is deliberately cheapest — map-wide detection at low Initiative cost makes it a viable tactical option. Move and Defend as "quick" actions reward tactical decisions over pure aggression.
+- **Implications**: AI scoring must account for variable Initiative costs when comparing default Actions. A character who Searches recovers Initiative 50% faster than one who Attacks.
+
+### Hit Bonus: Primary Component Only (#123)
+
+- **Decision**: The hit bonus (roll − Defense) is added as flat addition to the **primary damage type component only**. Secondary damage components in multi-component Actions do NOT receive the hit bonus.
+- **Rationale**: Prevents multi-component Actions from double-dipping on Attack investment. A "Flame Blade" with Slashing (primary) + Fire gets the hit bonus only on the Slashing component. This keeps multi-component Actions balanced — their advantage is hitting multiple Soak families, not amplifying hit bonus across all components.
+- **Implications**: The per-component damage pipeline step 4 must identify which component matches the Action's primary damage type. Content balance should consider that secondary components receive no hit bonus.
+
+### Off-Hand Fires on Enemy-Targeted Actions Only (#124)
+
+- **Decision**: Off-hand bonus attack fires when the main Action targets enemies (any enemy-targeting component — Damage, debuff). Does NOT fire for heals, self-buffs, Move, Defend, Search. A debuff-only Action targeting enemies DOES trigger off-hand.
+- **Rationale**: Thematically, the off-hand swing is part of an aggressive act. Healing an ally while also swinging your off-hand weapon is not a coherent combat action. Debuffs targeting enemies ARE aggressive (poisoning someone while stabbing with the main hand).
+- **Implications**: AI must distinguish offensive from non-offensive Actions for off-hand evaluation. Dual-wielding healers do NOT get bonus attacks when healing — only when using enemy-targeted Actions.
+
+### Revive at Step 0 in Effect Resolution (#125)
+
+- **Decision**: Revive components resolve at Step 0 (before all other effects) in the type-ordered effect resolution. Hybrid heal+revive Actions: Revive first (clean slate), then buffs (Step 1), then heals (Step 2).
+- **Rationale**: Ensures hybrid Actions work naturally without special-casing. A "Healing Light" with Revive+Buff+Heal revives the character (clearing statuses), applies fresh buffs, then heals — the revived character gets full benefit of all components.
+- **Implications**: Content authors can create reliable hybrid revive+buff Actions. The clean slate from Revive doesn't destroy the Action's own buff/heal components because they resolve after Revive.
+
+### Deferred Kill Trigger Queue (#126)
+
+- **Decision**: OnKill, OnFallen, and OnAllyFallen use a deferred trigger queue. Potential kills are recorded during Actions; confirmed at Step 4 (Fallen Resolution); triggers fire at Step 5 (Kill Triggers). Characters healed back above 0 HP before Step 4 do not generate kill triggers.
+- **Rationale**: Immediate OnKill during Actions would fire for targets who might be healed back above 0 HP before Fallen Resolution — creating false kills. Deferral ensures kill triggers are accurate. Also creates a cleaner separation between Action-phase triggers (immediate) and kill-phase triggers (deferred).
+- **Implications**: AI cannot rely on immediate OnKill feedback during the Turns Phase. Step 5 adds a new tick resolution phase. Recursion guard applies per-kill-event in Step 5.
+
+### Remove OnOverkill — Merge into OnKill (#127)
+
+- **Decision**: `OnOverkill` is removed from the trigger vocabulary. Overkill value data is available in the `OnKill` event payload. One fewer trigger type to maintain.
+- **Rationale**: OnOverkill was a niche trigger that could be fully served by OnKill with overkill data in its payload. Content that wants overkill-dependent behavior can check the payload value. Reduces vocabulary size without losing functionality.
+- **Implications**: All references to OnOverkill replaced with OnKill. Content using overkill-dependent triggers reads from the OnKill event payload.
+
+### New Trigger Events: Revival, Defense, Healing, Dodge, Summon (#128)
+
+- **Decision**: Seven new trigger events added: `OnRevive` (revival), `OnBlock` and `OnShieldBreak` (defense), `OnHeal` and `OnHealedBy` (healing), `OnDodge` (attack/defense), `OnSummon` (summon). One removed: `OnOverkill`.
+- **Rationale**: Fills gaps in the trigger vocabulary that would block Perk content design. OnBlock enables shield-focused builds. OnHeal/OnHealedBy creates symmetric healing triggers (matching OnDamageDealt/OnDamageTaken). OnDodge is the defender's counterpart to OnMiss. OnRevive enables post-revival Perks. OnSummon enables summoner synergies.
+- **Implications**: Traits-and-perks has 7 new trigger events available for Perk content design. AI considerations may need updating for new trigger evaluations. Total trigger vocabulary: 30+ events.
+
+### Detection: Per-Turn Only, No Persistent State (#129)
+
+- **Decision**: Detection is per-turn only — there is no persistent "this team has detected character X" state between turns. Before each character's turn, passive detection re-rolls. Active Search also has per-turn persistence only. Teammates must make their own detection checks.
+- **Rationale**: Per-turn detection prevents a single high-Awareness character from permanently revealing all stealth enemies for the whole team. Each character must earn their own detection. This makes stealth more robust and Awareness investment more individually meaningful.
+- **Implications**: No detection state tracking needed between turns (simpler implementation). AI stealth evaluation must account for per-character detection probability, not team-level detection. Search's value is per-character, not team-wide.
+
+### DoTs Bypass Block (#130)
+
+- **Decision**: DoTs bypass both Soak AND Block. DoT tick damage occurs in the Effects Phase, outside the per-component damage pipeline where Block operates. DoT damage path: DoT tick → Shield absorption → Health.
+- **Rationale**: Block is a per-Action mechanic — the shield physically interposes against an incoming attack. DoTs are ongoing status effects, not discrete attacks. Block conceptually doesn't apply. This also simplifies the Effects Phase — DoT damage just goes straight to Shields/Health.
+- **Implications**: DoT-focused builds bypass two layers of defense (Soak and Block) but are still gated by Resistance at application and Shields during ticks. Makes Resistance and Shields the primary DoT defenses.
+
+### Summon Deaths Fire Full Triggers (#131)
+
+- **Decision**: When summons are removed (killed or summoner enters Fallen), they fire full trigger events — OnFallen on the summon, OnAllyFallen on teammates. A summoner with 5 summons falling generates 5× OnAllyFallen.
+- **Rationale**: Summons are combatants that participate fully in the trigger system. Excluding them from death triggers would create special-case code and prevent interesting summoner Perks (e.g., "Necro Empowerment: OnAllyFallen: gain stacks of Empowered"). The cascade potential is a feature, not a bug — it rewards summoner investment.
+- **Implications**: Content design should account for summon death cascades. A 5-summon necromancer falling is a major trigger event (6 total Fallen events). Balance should consider this when designing OnAllyFallen Perks.
+
+### Defend + Stun: Accepted Emergent Strategy (#132)
+
+- **Decision**: The Defend+Stun interaction (indefinite defense via self-stun) is an accepted emergent strategy. A team deliberately stunning their own Defended tank creates a meaningful trade-off: costs the stunner's Action, deals friendly fire damage from the stun-applying ability, and the stunned tank can't act.
+- **Rationale**: This interaction emerges naturally from the rules (Defending clears on turn start; stunned characters never get turns). Rather than patch it with a special case, it's accepted as an interesting tactical option with real costs. Content provides counters (anti-stun Perks, dispel mechanics, Defend-removing abilities).
+- **Implications**: No rule changes needed. Content design should ensure adequate anti-stun and dispel options exist as counters. AI should be capable of evaluating self-stun strategies (likely very niche).
+
+### Crowd Appeal: Deferred to Phase 4 (#133)
+
+- **Decision**: Crowd Appeal (derived stat from characters spec) has no mechanical combat effect in MVP. It exists as a derived stat for future use in the Morale system (Phase 4).
+- **Rationale**: Crowd Appeal feeds into the Morale system, which is entirely deferred. Including it as a stat now ensures the foundation exists, but there's no point in giving it combat mechanics before Morale is designed.
+- **Implications**: Crowd Appeal can be calculated and displayed but has no combat impact. Phase 4 Morale design will define its mechanical role.
+
+### Revival Clean Slate: True Clean Slate (#134)
+
+- **Decision**: Revival clean slate clears ALL statuses — both beneficial and harmful. No "buff vs debuff" classification. This is a complete reset.
+- **Rationale**: Binary buff/debuff classification would add complexity (what about neutral statuses? Mixed statuses?). "Clear everything" is the simplest, most predictable rule. Hybrid revive+buff Actions work naturally via type-ordered resolution: Revive (Step 0, clears all) → Status (Step 1, applies fresh buffs).
+- **Implications**: Pre-fall buffs are lost on revival. Content cannot rely on buffs persisting through fall+revival cycles. Revive+buff Actions are the intended way to buff revived characters.
+
+### Kill Triggers in Step 5 of Tick Resolution (#135)
+
+- **Decision**: Add Step 5 "Kill Triggers" to tick resolution order, after Fallen Resolution (Step 4). Tick now has 5 steps: (1) Effects Phase, (2) Initiative Phase, (3) Turns Phase, (4) Fallen Resolution, (5) Kill Triggers.
+- **Rationale**: Kill triggers need their own resolution step because they are deferred (not fired during Actions). Placing them after Fallen Resolution ensures only confirmed kills generate triggers. This is the natural home for the deferred kill trigger queue.
+- **Implications**: Tick resolution gains a fifth step. Data model needs a deferred kill trigger queue that accumulates during the tick and drains in Step 5.
+
+### Effects Phase: Internal Sub-Ordering (#136)
+
+- **Decision**: The Effects Phase resolves in fixed internal order: (1) Decay — all stacks on all statuses decay, (2) Effects — all per-stack effects apply, (3) Shield Expiry — expired shields removed last. Per-character ordering: highest stack count first (tiebreaker: alphabetical). All characters process simultaneously.
+- **Rationale**: Decay-before-effects means statuses apply at their post-decay stack count (not pre-decay). Shield expiry last means shields protect against DoTs on their final tick. Simultaneous cross-character processing prevents ordering dependencies.
+- **Implications**: A 3-stack DoT that decays by 1 this tick deals damage at 2 stacks, not 3. Shields set to expire this tick still absorb DoT damage. Implementation must process all characters' decay before any character's effects.
+
+### Step 5 Kill Triggers: AoE Batch Sharing (#137)
+
+- **Decision**: AoE kills from the same Action share a batch in Step 5. Each kill within the batch is a separate originating event for the recursion guard.
+- **Rationale**: Consistent with the batch-then-triggers model for AoE resolution. Multiple kills from one AoE should fire their kill triggers together (as a batch), matching how AoE Action triggers work. Separate originating events per kill ensures the recursion guard tracks each kill chain independently.
+- **Implications**: A "Blood Frenzy" Perk (OnKill: +damage stack) would gain one stack per confirmed kill in the batch. An AoE that kills 3 enemies gives 3 OnKill events, each as a separate originating event.
+
+### OnRevive: Immediate During Step 0 (#138)
+
+- **Decision**: `OnRevive` fires during Step 0 of effect resolution as an immediate trigger on the revived character. Not deferred like kill triggers.
+- **Rationale**: OnRevive needs to fire immediately so that Revive-triggered effects (e.g., "gain Shield on revive") can apply before other Action components resolve. Deferring it would break the type-ordered resolution model.
+- **Implications**: Content can create "Phoenix" style Perks: OnRevive → gain Shield, gain buff, etc. These effects apply in the Revive step before other Action components.
+
+### OnBlock and OnShieldBreak: Pipeline Triggers (#139)
+
+- **Decision**: `OnBlock` fires at pipeline step 5 (Block check) and `OnShieldBreak` fires at pipeline step 7 (Shield absorption). Both join the Action's trigger collection for batch resolution.
+- **Rationale**: These are combat pipeline events that naturally fire during their respective pipeline steps. Joining the Action's trigger collection is consistent with how other pipeline triggers (OnHit, OnCrit) work.
+- **Implications**: Shield-focused builds can trigger effects on blocks ("Riposte: OnBlock → counter-attack") and shield breaks ("Desperate Shield: OnShieldBreak → gain Defending status").
+
+### OnHeal/OnHealedBy: Symmetric Healing Triggers (#140)
+
+- **Decision**: `OnHeal` (healer's perspective) and `OnHealedBy` (recipient's perspective) added as symmetric counterparts to OnDamageDealt/OnDamageTaken. Fire immediately during the Action.
+- **Rationale**: The trigger vocabulary had damage triggers from both perspectives but no healing equivalents. Healing-focused builds need trigger events. OnHeal enables "Holy Fervor" (gain stacks on healing), OnHealedBy enables "Grateful Blessing" (buff when healed).
+- **Implications**: Content design gains healing-triggered Perk options. AI Considerations should evaluate healing triggers when assessing heal Action value.
+
+### OnDodge: Defender's Perspective on Miss (#141)
+
+- **Decision**: `OnDodge` fires when this character successfully dodges an enemy attack (defender's perspective, attack roll < 0). Symmetric with `OnMiss` (attacker's perspective).
+- **Rationale**: The vocabulary had OnMiss (attacker side) but no defender equivalent. High-evasion builds need a trigger for "dodge-and-counter" Perks (e.g., "Riposte: OnDodge → bonus attack").
+- **Implications**: Content gains dodge-reactive Perks. Speed/Accuracy investment gains trigger synergy value beyond just hit/miss probability.
+
+### OnSummon: Summoner Trigger (#142)
+
+- **Decision**: `OnSummon` fires when this character creates a summon via the Summon effect component. Fires immediately during the Action.
+- **Rationale**: Summoner builds need a trigger for summon-related synergies (e.g., "Pack Tactics: OnSummon → buff all existing summons", "Overcharge: OnSummon → summon gains bonus stats").
+- **Implications**: Content gains summoner-synergy Perks. AI should factor OnSummon triggers into summon Action evaluation.
+
+### Trigger Timing Classification (#143)
+
+- **Decision**: Triggers are classified into three timing categories: immediate (fire during Action resolution), revive (fire during Step 0), and deferred (fire in Step 5). This classification determines when effects from triggers can interact with other combat events.
+- **Rationale**: Different trigger types need different timing to produce correct behavior. Kill triggers must be deferred (to avoid false kills from healed targets). Revive triggers must be immediate (to work within effect resolution). All others are immediate (standard batch-then-triggers model).
+- **Implications**: Implementation needs three trigger dispatch paths. Content authors should understand timing when designing trigger-dependent Perks.
+
 ---
 
 ## Open Questions
 
-Most original questions are resolved. Remaining items are tuning values and deferred systems:
+Most original questions are resolved (143 decisions across 31 rounds). Remaining items are tuning values and deferred systems:
 
 ### Tuning Values
 1. **K constant for Soak formula**: What value of K in `Soak[family]/(Soak[family]+K)` produces the desired damage reduction curve? Needs testing with target stat ranges.
@@ -1233,6 +1633,11 @@ Most original questions are resolved. Remaining items are tuning values and defe
 16. **Stealth break K constant**: What K in `damage_taken / (stealth_stacks × K)` produces the desired stealth fragility?
 17. **Resistance K constant(s)**: What K per resistance type in `Resistance / (Resistance + K)` produces desired stack/damage reduction curves?
 18. **Summon control capacity multipliers**: What per-Trait capacity formulas and per-summon control costs produce desired summon counts (2-5 for dedicated summoners)?
+19. **K_pen constant for Penetration DR**: What K_pen in `Pen × K_pen / (Pen + K_pen)` produces the desired Penetration curve?
+20. **K_armor constant for Might armor mitigation**: What K_armor in `Might / (Might + K_armor)` produces desired armor penalty reduction?
+21. **Block Chance/Value per shield type**: Buckler (~20%/low), Kite (~35%/med), Tower (~50%/high) — exact values TBD.
+22. **Status decay rates per type**: Per-status decay percentages and attribute divisors (e.g., Burning 25%, Stun Willpower/10).
+23. **Effects Phase tiebreaker for equal stack counts**: When multiple statuses on a character have the same stack count, the deterministic ordering (alphabetical by status name or definition order) needs to be confirmed at implementation time.
 
 ### Deferred Systems
 12. **Morale**: Full design deferred to Phase 4.
@@ -1249,16 +1654,16 @@ Most original questions are resolved. Remaining items are tuning values and defe
 
 | Spec | Implication |
 |------|-------------|
-| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection across 2+ teams ("enemy" = not my team). AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system (blend, sharpness, and lookahead depth). Combat log must record AI scoring data (top 3 Actions per turn with scores). Combat system passes context flags to AI at fight start (canonical schema defined here). Characters within a tick act sequentially in Initiative order with state updates between each. `resource_efficiency` Scorer uses fight phase signal (current_tick / attrition_ramp_onset) for conservation strategy. AI must factor shield HP and per-type Soak into target vulnerability and damage output assessments. AI must evaluate primary damage type choice for mixed Actions (which Defense is weaker). Dying Blow Actions need AI handling (character at ≤0 HP still acts). **Rounds 14-19**: AI must evaluate hybrid heal+revive Actions for both living and Fallen allies. AI must factor self-heal as a high-priority Dying Blow option. AI must evaluate summon control capacity when deciding to summon. Default Attack Stamina cost feeds into `resource_efficiency` Scorer. |
+| [combat-ai](combat-ai.md) | AI must understand zones, ranges, action options, and target selection across 2+ teams ("enemy" = not my team). AI must handle 20–40+ Actions per character efficiently. AI must evaluate multi-resource Action costs, tag-scoped Stat Adjustment bonuses (including multi-tag additive stacking), stealth/detection trade-offs (passive + active Search), revival priority, and resource conservation. Judgment derived stat (40% Awareness + 35% Willpower + 25% Intellect) controls AI decision quality via the Utility AI system (blend, sharpness, and lookahead depth). Combat log must record AI scoring data (top 3 Actions per turn with scores). Combat system passes context flags to AI at fight start (canonical schema defined here). Characters within a tick act sequentially in Initiative order with state updates between each. `resource_efficiency` Scorer uses fight phase signal (current_tick / attrition_ramp_onset) for conservation strategy. AI must factor shield HP, Block Chance, and per-type Soak into target vulnerability and damage output assessments. AI must evaluate primary damage type choice for mixed Actions (which Defense is weaker). Dying Blow Actions need AI handling (character at ≤0 HP still acts). AI must evaluate hybrid heal+revive Actions for both living and Fallen allies. AI must factor self-heal as a high-priority Dying Blow option. AI must evaluate summon control capacity when deciding to summon. Default Attack Stamina cost feeds into `resource_efficiency` Scorer. **Round 20**: AI must evaluate off-hand bonus attack value (sequential second pass). AI `aoe_net_value` Scorer must account for friendly fire going through full pipeline. AI must factor Might-based armor Speed mitigation into equipment evaluation. **Round 26**: Off-hand fires on debuff-only enemy Actions (AI scoring update). Kill triggers are deferred to Step 5 (AI can't rely on immediate OnKill during Actions). Detection is per-turn (AI stealth evaluation must be per-character, not persistent). 7 new trigger events for AI Consideration evaluation: OnRevive, OnBlock, OnShieldBreak, OnHeal, OnHealedBy, OnDodge, OnSummon. Variable Action Speeds on default Actions (Search +50, Move/Defend +25) affect AI cost-benefit. |
 | [post-combat](post-combat.md) | Combat hands off to post-combat at victory/defeat. Provides: Combat Scoreboard (per-character stats including Dying Blows), Fallen list with overkill values, active Traits list (for Perk Discovery), Context Flags (exhibition status, event type), per-team elimination order/placement. Post-combat owns: injury/death checks, Perk Discovery resolution, recruitment, loot distribution. |
-| [characters](characters.md) | 9 Attributes feed all combat calculations via derived stat formulas (including Judgment, Physical Defense, 3 Soak families). **New derived stats**: Physical Defense (40% Speed + 35% Accuracy + 25% Awareness), Physical Soak (60% Endurance + 25% Might + 15% Speed), Elemental Soak (45% Endurance + 35% Awareness + 20% Luck), Magical Soak (55% Willpower + 25% Intellect + 20% Luck). Anatomical slots determine weapon/armor options. Stamina exhaustion (0→Health drain at 1:1 ratio), percentage-based Stamina regen + Defend boost. Fallen sub-state mechanics with full-tick deferral. Post-combat outcomes handled by [post-combat](post-combat.md). |
-| [traits-and-perks](traits-and-perks.md) | Perks provide Actions, Stat Adjustments, Triggers. Traits unlock resource types. Effect resolution order within Actions: status → damage → movement (overrides simultaneous model). All cooldowns reset per-combat. Perk Discovery changed to per-Trait end-of-combat check (active Traits only) — resolved in [post-combat](post-combat.md). Tag-scoped bonuses: flat or %, additive stacking, flat→% order. Trait/Perk level amplification multipliers shared curve ×1.0/×1.2/×1.4/×1.7/×2.0. Actions with Damage components need a `primary_damage_type` field. `OnDyingBlow` added to Trigger event vocabulary for "Last Stand" style Perks. |
-| [equipment](equipment.md) | Weapons provide Attack/Damage values and damage type tags. Armor provides per-type Soak bonuses (Physical/Elemental/Magical families + per-type tags). Affixes can grant Penetration (universal), crit bonuses, status riders, stealth-tagged effects, shield effects, starting Initiative offset. Equipment affixes use the tag system for synergies. |
+| [characters](characters.md) | 9 Attributes feed all combat calculations via derived stat formulas (including Judgment, Physical Defense, 3 Soak families). **New derived stats**: Physical Defense (40% Speed + 35% Accuracy + 25% Awareness), Physical Soak (60% Endurance + 25% Might + 15% Speed), Elemental Soak (45% Endurance + 35% Awareness + 20% Luck), Magical Soak (55% Willpower + 25% Intellect + 20% Luck). Anatomical slots determine weapon/armor options. Stamina exhaustion (0→Health drain at 1:1 ratio), percentage-based Stamina regen + Defend boost. Fallen sub-state mechanics with full-tick deferral. Post-combat outcomes handled by [post-combat](post-combat.md). **Round 20**: Might description updated — also mitigates armor Speed penalties via `Might/(Might+K_armor)` formula. |
+| [traits-and-perks](traits-and-perks.md) | Perks provide Actions, Stat Adjustments, Triggers. Traits unlock resource types. Effect resolution order within Actions: Revive (Step 0) → status → damage → movement (overrides simultaneous model). All cooldowns reset per-combat. Perk Discovery changed to per-Trait end-of-combat check (active Traits only) — resolved in [post-combat](post-combat.md). Tag-scoped bonuses: flat or %, additive stacking, flat→% order. Trait/Perk level amplification multipliers shared curve ×1.0/×1.2/×1.4/×1.7/×2.0. Actions with Damage components need a `primary_damage_type` field. `OnDyingBlow` added to Trigger event vocabulary for "Last Stand" style Perks. **Round 20**: Trigger chaining enabled with recursion guard — content authors should be aware Triggers can fire further Triggers. Status immunity Perks → reframe as "high Resistance + fast attribute-decay" Perks. **Round 26**: OnOverkill removed from vocabulary. 7 new triggers available for Perk content design (OnRevive, OnBlock, OnShieldBreak, OnHeal, OnHealedBy, OnDodge, OnSummon). Revive at Step 0 enables reliable hybrid heal+revive Actions. Hit bonus is primary-component-only (affects multi-component Action design). |
+| [equipment](equipment.md) | Weapons provide Attack/Damage values and damage type tags. Armor provides per-type Soak bonuses (Physical/Elemental/Magical families + per-type tags). Affixes can grant Penetration (universal, now with DR), crit bonuses, status riders, stealth-tagged effects, shield effects, starting Initiative offset. Equipment affixes use the tag system for synergies. **Round 20**: Block Chance position confirmed in combat pipeline (post-hit-bonus, pre-Soak). Off-hand bonus attack confirmed as sequential second pipeline pass. Penetration affixes need rebalancing for diminishing returns. Armor Speed penalty section needs cross-reference to Might mitigation formula. **Round 26**: No direct changes. Block clarified as not applying to DoTs (Block is a per-Action mechanic, not Effects Phase). |
 | [consumables](consumables.md) | Consumables are usable during combat turns (potions, bombs, scrolls). Consumables can provide revival (Revive effect component) and shields (Shield effect component). AI must decide when to use them. |
 | [tournaments](tournaments.md) | Tournament matches are combat instances. Multi-team formats supported with ranked elimination order. Attrition ramp onset and rate are per-event-type (specified in Context Flags). Per-combat cooldown and resource pool resets between rounds. Star-gated entry to manage power gaps. Post-combat phases (injury, discovery, recruitment, loot) handled by [post-combat](post-combat.md). Fight length varies by event type (25–150 ticks). Event templates define starting zone assignments per team. |
 | [meta-balance](../architecture/meta-balance.md) | Combat Scoreboard data (win/loss per character, per Trait, per-character stats, Dying Blows) feeds the automatic underdog balancing system. |
-| [data-model](../architecture/data-model.md) | Must support: hidden system Trait type, effect component typed format (type tag + key-value parameters), target tag vocabulary (including `[Fallen]`), Trigger event vocabulary (including OnDyingBlow), per-family Soak values (3 families), universal Penetration, Physical + Magic Defense as derived stats, per-component damage resolution, overkill tracking per Fallen character, Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO ordering), Context Flags schema, attrition ramp state, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking, `primary_damage_type` field on Actions. **Rounds 14-19**: Summon control capacity Resource Pool per summoner Trait, per-summon control cost field, formula representation (`{base, weights}` + optional `formula_override`), formula modifier `scope` field (list of formula categories), Resistance K values per type, default Attack Stamina cost. |
+| [data-model](../architecture/data-model.md) | Must support: hidden system Trait type, effect component typed format (type tag + key-value parameters), target tag vocabulary (including `[Fallen]`), Trigger event vocabulary (including OnDyingBlow), per-family Soak values (3 families), universal Penetration with DR (`Pen×K/(Pen+K)`), Physical + Magic Defense as derived stats, per-component damage resolution (9-step pipeline), overkill tracking per Fallen character, Combat Scoreboard per-character stat accumulation (including Dying Blows), Shield instances (HP pool, duration, type filter, FIFO ordering), Context Flags schema, attrition ramp state, event template schema (starting zones per team, Initiative offsets), seeded PRNG per combat, structured event stream/log storage, per-team elimination order tracking, `primary_damage_type` field on Actions. Summon control capacity Resource Pool per summoner Trait, per-summon control cost field, formula representation (`{base, weights}` + optional `formula_override`), formula modifier `scope` field (list of formula categories), Resistance K values per type, default Attack Stamina cost. **Round 20**: All combat values are integers (ceiling rounding). Status type definitions gain `decay_formula` field. Block Chance as pipeline step. Off-hand bonus attack as second Action. Trigger recursion guard per-event. Might armor mitigation formula. Penetration K_pen constant. **Round 26**: Effects Phase sub-ordering (decay→effects→shield expiry). Step 5 kill trigger queue with deferred entries. Revive Step 0 in resolution pipeline. Default Action Speed values (Search +50, Move/Defend +25). Per-turn detection state (no persistent detection tracking needed). 7 new trigger event types, OnOverkill removed. |
 
 ---
 
-_Last updated: 2026-02-18 — Rounds 14-19 interrogation: 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save via Dying Blow, summoner revival). Summon control capacity budget (Resource Pool, not per-Perk cap). Mutual elimination = draw. Non-Stamina resource depletion hard-gates Actions. Crit formula: percentage of base (`base × (1 + crit_multiplier)`). Resistance formula: percentage with diminishing returns (`Resistance/(Resistance+K)`), same formula for stacks and damage. Stealth break formula: `damage_taken / (stealth_stacks × K)`. Minimum 1 stack on all status applications. Status decay frozen while Fallen. Fallen Resolution in reverse Initiative order with sequential Triggers. Default Attack costs Stamina; Move/Defend/Search free. Formula representation: weighted list + optional expression. Formula modifier tags scoped per-category. Revive works on any ally (no-op on living); `[Fallen]` target tag for Fallen-only Actions. DoT overkill counts. Total: 100 decisions across 19 rounds. Previous: rounds 10-13 (11 decisions), round 9 (24 decisions), round 8 (20 decisions), rounds 1-7 (27 decisions)._
+_Last updated: 2026-02-22 — Rounds 26-31 interrogation: 23 additional decisions. Hit bonus primary-component-only. Deferred OnKill trigger queue (Step 5). Kill Triggers as new tick resolution step. Effects Phase internal ordering (decay→effects→shield expiry). Default Action Speeds (Search +50, Move/Defend +25, Attack 0). Revive at Step 0 in effect resolution. Per-turn detection persistence (no persistent state). Trigger vocabulary expansion (7 new: OnRevive, OnBlock, OnShieldBreak, OnHeal, OnHealedBy, OnDodge, OnSummon; 1 removed: OnOverkill). DoTs bypass Block. Summon death triggers. Defend+Stun accepted strategy. Crowd Appeal deferred. True clean slate on revival. Total: 143 decisions across 31 rounds. Previous: rounds 20-25 (20 decisions), rounds 14-19 (18 decisions), rounds 10-13 (11 decisions), round 9 (24 decisions), round 8 (20 decisions), rounds 1-7 (27 decisions)._

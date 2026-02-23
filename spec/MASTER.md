@@ -55,7 +55,7 @@ See [mvp-scope.md](architecture/mvp-scope.md) for full details.
 |---|------|-----|--------|-------|--------------------|
 | 1 | Characters | [characters.md](domains/characters.md) | 🟢 | 1 | None — tuning values deferred to combat, tournaments, economy specs |
 | 2 | Traits & Perks | [traits-and-perks.md](domains/traits-and-perks.md) | 🟢 | 1 | Updated 2026-02-18: Perk Discovery model changed to per-Trait end-of-combat roll (active Traits only). Post-combat references updated to post-combat.md. MVP content examples deferred to implementation. All structural/mechanical questions resolved. |
-| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-18: rounds 14-19 — 18 additional decisions. Revival mechanics (clean slate, healing saves, self-save, summoner revival), summon control capacity budget, mutual elimination draw, non-Stamina resource hard-gating, crit/resistance/stealth formulas resolved, min 1 stack, frozen decay while Fallen, Fallen Resolution in Initiative order, default Attack costs Stamina, formula representation, formula modifier per-category scope, Revive on any ally + `[Fallen]` target tag. 19 rounds total, 100 decisions. |
+| 3 | Combat | [combat.md](domains/combat.md) | 🟢 | 1 | Updated 2026-02-22: rounds 26-31 — 23 additional decisions (implementation readiness pass). Hit bonus primary-only, deferred OnKill queue, Step 5 kill triggers, Effects Phase ordering, default Action Speeds, Revive Step 0, detection per-turn, trigger vocabulary expansion (7 new, 1 removed). 31 rounds total, 143 decisions. |
 | 3b | Post-Combat | [post-combat.md](domains/post-combat.md) | 🟢 | 1 | Updated 2026-02-18: 8 interrogation rounds, 18 decisions. Injury mechanics fully specified (diminishing returns formula, Injury Resistance derived stat, tiered severity, named injury catalog, game-tick recovery, death immunity Perks). XP: equal share + participation bonus. Recruitment: NPC generation from event archetype pool, declined → Free Agent. Per-event post-combat configuration. Tournament: full post-combat per round, immediate effects. |
 | 4 | Combat AI | [combat-ai.md](domains/combat-ai.md) | 🟢 | 2 | Updated 2026-02-18: Context Flags reference combat.md for canonical schema. resource_efficiency uses fight phase signal. Previous: Round 2 (14 decisions). Standard library: 4 Gates + 14 Tactical Scorers + 5 Personality Scorers. Remaining items are tuning values. |
 | 5 | Equipment | [equipment.md](domains/equipment.md) | 🟢 | 2 | Updated 2026-02-21: 31 interrogation rounds, 103 decisions. **Round 31 (cleanup)**: Deadly/Sunder per-implement scope, tag-derived Action Speed, enchanting source-themed, DW penalties (−15%/−35%), armor Speed penalties (Med −2/Hvy −5), armor 3-attribute scaling locked, degradation ~2/fight, percentage-based penalties (~20%). All design decisions resolved. Remaining: implementation-phase tuning values and deferred economic numbers. |
@@ -129,6 +129,43 @@ characters (primitive — depends on nothing)
 ---
 
 ## Recent Changes
+
+### 2026-02-22: Combat Rounds 26-31 — 23 Additional Decisions (Implementation Readiness Pass)
+
+- **Deepened combat spec** with 23 decisions across 6 interrogation rounds focused on implementation ambiguities, balance edge cases, and missing trigger events. Total decisions: 143 across 31 rounds.
+- **Numeric Precision**: Fixed Burning 25% decay example (ceiling rounding: 10→7→4→2→1→0, 5 ticks not 8). Hit bonus applies to primary damage component only (prevents multi-component double-dipping).
+- **Tick Structure**: Added Step 5 "Kill Triggers" to tick resolution (5 steps total). Effects Phase internal ordering specified: decay → effects → shield expiry (shields protect against DoTs on final tick).
+- **Action Economy**: Default Action Speeds updated: Attack=0, Move=+25, Defend=+25, Search=+50. Non-offensive actions are faster. Off-hand bonus attack fires on enemy-targeted Actions only (not heals/self-buffs/Move/Defend/Search).
+- **Effect Resolution**: Revive at Step 0 (before status/damage/movement). Enables reliable hybrid revive+buff+heal Actions. True clean slate on revival — ALL statuses cleared (no buff/debuff classification).
+- **Trigger Model**: Deferred kill trigger queue — OnKill, OnFallen, OnAllyFallen fire in Step 5 (confirmed kills only, not false kills from healed targets). OnOverkill removed (data in OnKill payload). 7 new events: OnRevive, OnBlock, OnShieldBreak, OnHeal, OnHealedBy, OnDodge, OnSummon. Three timing categories: immediate, revive, deferred.
+- **Detection**: Per-turn only, no persistent state. Each character re-rolls detection before their turn. Teammates must detect independently.
+- **Design Notes**: Defend+Stun accepted as emergent strategy (meaningful trade-off). Crowd Appeal deferred to Phase 4 (no MVP combat effect). DoTs bypass Block (Effects Phase, outside pipeline). Summon deaths fire full trigger events (cascade potential accepted).
+- Updated specs:
+  - `combat.md` — 23 new decisions (#121-143). Step 5 added. Effects Phase ordering. Default Action Speeds. Revive Step 0. Deferred kill trigger model. Trigger vocabulary expanded (30+ events). Open Questions: 1 new (Effects Phase tiebreaker).
+  - `glossary.md` — 11 terms updated (Tick, Action Speed, Defend, Search, Status Effect, Trigger, Effect Resolution Order, Overkill, Sneaking, Dying Blow, Fallen).
+  - Downstream flagged: combat-ai (off-hand scope, deferred OnKill, per-turn detection, 7 new trigger events, variable Action Speeds), traits-and-perks (OnOverkill removed, 7 new triggers, Revive Step 0, hit bonus primary-only), data-model (Effects Phase sub-ordering, Step 5 queue, Revive Step 0, default Action Speeds, per-turn detection state), equipment (Block clarified — not DoTs)
+
+### 2026-02-22: Combat Rounds 20-25 — 20 Additional Decisions (Implementation Readiness Pass)
+
+- **Deepened combat spec** with 20 decisions across 6 interrogation rounds focused on implementation readiness. Total decisions: 120 across 25 rounds.
+- **Numeric System**: All combat values are integers, fractional results always round up (ceiling). Minimum 1 damage per component on hit. Minimum 1 stack on status application. Ceiling rounding favors attackers.
+- **Combat Pipeline Rewrite**: 9-step per-component damage resolution: (1) base damage, (2) crit multiplier, (3) damage modifiers, (4) ADD hit bonus (flat, post-crit/buffs), (5) Block check, (6) Soak reduction (with Pen DR), (7) Shield absorption, (8) minimum 1 floor, (9) apply to Health.
+- **Block Mechanics**: Step 5 of pipeline. From shield items. Blocks all damage types. Proportional split across multi-component damage. One check per Action.
+- **Friendly Fire**: Full combat pipeline applies to allies hit by `[All]` targeting. Resistance-skip is for beneficial effects only — harmful effects from allies go through Resistance normally.
+- **Status Stacking Rewrite**: Additive stacking (new apps ADD stacks). Stacks ARE duration (no separate duration tracking). Each status type defines a per-tick decay formula (percentage, flat, or attribute-derived like `Willpower/10`). No true immunity — min 1 stack + fast decay provides functional immunity.
+- **Penetration DR**: `Effective_Pen = Pen × K_pen / (Pen + K_pen)`. Same harmonic formula as Soak/Resistance.
+- **Defend All Defenses**: Boosts Physical Defense, Magic Defense, and all 3 Soak families. No tick limit (persists through stun — accepted as thematic).
+- **Trigger Recursion Guard**: Triggers can chain (A fires B fires C). Each individual Trigger fires at most once per originating event (per-event "fired set").
+- **AoE One Roll**: Attacker rolls once; each target compares against own Defense independently.
+- **Off-Hand Bonus Attack**: Sequential second full pipeline pass when dual-wielding.
+- **Hit Bonus Position**: Post-crit/buffs, pre-Block/Soak/Shield. Flat addition, NOT amplified by crit or damage modifiers.
+- **Summon Starting Initiative**: 0 (accumulate from scratch).
+- **Might Armor Speed Mitigation**: `effective_penalty = base_penalty × (1 - Might/(Might+K_armor))`. Gives Might unique combat niche.
+- **Equipment Combat Mechanics Cross-Reference**: Table listing 14 equipment-originated combat mechanics with links to equipment spec.
+- Updated specs:
+  - `combat.md` — 20 new decisions (#101-120). Pipeline rewrite, 6 new sections, 14 decision blocks. Open Questions: 4 new tuning values (K_pen, K_armor, Block values, status decay rates).
+  - `glossary.md` — 8 terms updated (Soak, Penetration, Status Effect, Block Chance, Resistance, Defend, Might, Trigger).
+  - Downstream flagged: combat-ai (off-hand evaluation, friendly fire scoring, Might armor evaluation), characters (Might description update), traits-and-perks (trigger chaining awareness, no immunity Perks), equipment (Block pipeline position confirmed, Pen DR rebalancing, armor Speed → Might cross-ref), data-model (integer rounding, status decay_formula field, Block pipeline step, trigger recursion guard, Might armor formula, K_pen constant)
 
 ### 2026-02-21: Equipment Cleanup Round 31 — 15 Decisions (Complete → 🟢)
 
@@ -629,4 +666,4 @@ See [glossary.md](glossary.md) for canonical definitions of all terms.
 ---
 
 ## Last Updated
-_2026-02-21 — Equipment cleanup round 31: 103 decisions total. Deadly/Sunder per-implement, DW penalties (−15%/−35%), armor Speed/scaling locked, percentage-based penalties. Status → 🟢 Complete. Seven specs 🟢 Complete._
+_2026-02-22 — Combat rounds 26-31: 143 decisions total (23 new). Implementation readiness pass — hit bonus primary-only, deferred OnKill queue, Step 5 kill triggers, Effects Phase ordering, default Action Speeds, Revive Step 0, detection per-turn, trigger vocabulary expansion (7 new, 1 removed). Seven specs 🟢 Complete._
