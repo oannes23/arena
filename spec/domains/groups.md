@@ -3,8 +3,8 @@
 **Status**: 🟡 In progress
 **Last interrogated**: —
 **Last verified**: —
-**Depends on**: [characters](characters.md), [traits-and-perks](traits-and-perks.md), [economy](economy.md)
-**Depended on by**: [equipment](equipment.md), [consumables](consumables.md), [roster-management](roster-management.md), [tournaments](tournaments.md)
+**Depends on**: [characters](characters.md), [traits-and-perks](traits-and-perks/index.md), [economy](economy.md)
+**Depended on by**: [equipment](equipment/index.md), [consumables](consumables.md), [roster-management](roster-management.md), [tournaments](tournaments.md)
 
 ---
 
@@ -96,9 +96,9 @@ A character's Bond Trait slots (count = Star Rating) limit how many Groups they 
 | Spec | Implication |
 |------|-------------|
 | [characters](characters.md) | Group-specific recruitment archetypes are defined per Group, not globally. |
-| [traits-and-perks](traits-and-perks.md) | Bond Traits map to Groups. Each Group needs at least one Bond Trait defined. Perk trees should include service access benefits. |
-| [combat](combat.md) | Some Groups may offer pre-combat buff services or post-combat healing. |
-| [equipment](equipment.md) | Equipment is bought/sold through Group vendor services. Group identity determines available loot tables. |
+| [traits-and-perks](traits-and-perks/index.md) | Bond Traits map to Groups. Each Group needs at least one Bond Trait defined. Perk trees should include service access benefits. |
+| [combat](combat/index.md) | Some Groups may offer pre-combat buff services or post-combat healing. |
+| [equipment](equipment/index.md) | Equipment is bought/sold through Group vendor services. Group identity determines available loot tables. |
 | [consumables](consumables.md) | Consumables purchased/crafted through Group services. |
 | [economy](economy.md) | Groups are the primary gold sinks (services cost gold). Pricing mechanics, vendor refresh cycles, and transaction rules live in economy spec. |
 | [roster-management](roster-management.md) | Recruitment happens through Groups. Group access affects roster-building strategy. |

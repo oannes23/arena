@@ -3,7 +3,7 @@
 **Status**: 🟡 In progress
 **Last interrogated**: —
 **Last verified**: —
-**Depends on**: [combat](combat.md), [post-combat](post-combat.md), [economy](economy.md)
+**Depends on**: [combat](combat/index.md), [post-combat](post-combat.md), [economy](economy.md)
 **Depended on by**: None
 
 ---
@@ -112,7 +112,7 @@ When a tournament fires with empty slots:
 
 | Spec | Implication |
 |------|-------------|
-| [combat](combat.md) | Tournaments are sequences of combat instances. Match format, team size, and zone maps may vary by tournament tier. Attrition ramp onset/rate configured per event type via Context Flags. |
+| [combat](combat/index.md) | Tournaments are sequences of combat instances. Match format, team size, and zone maps may vary by tournament tier. Attrition ramp onset/rate configured per event type via Context Flags. |
 | [post-combat](post-combat.md) | Post-combat phases (injury/death checks, Perk discovery, recruitment, loot) apply per tournament round. Exhibition events skip injury checks. Non-exhibition events trigger tiered injury rolls with overkill severity. |
 | [economy](economy.md) | Tournament rewards are a primary income source. Entry fees (if any) are a gold sink. |
 | [roster-management](roster-management.md) | Character commitment during tournaments affects roster availability. Injury/death from Championship fights triggers the injury system. |

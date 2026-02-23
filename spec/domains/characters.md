@@ -4,7 +4,7 @@
 **Last interrogated**: 2026-02-14
 **Last verified**: —
 **Depends on**: None (primitive)
-**Depended on by**: [traits-and-perks](traits-and-perks.md), [combat](combat.md), [equipment](equipment.md), [economy](economy.md), [groups](groups.md), [roster-management](roster-management.md), [tournaments](tournaments.md)
+**Depended on by**: [traits-and-perks](traits-and-perks/index.md), [combat](combat/index.md), [equipment](equipment/index.md), [economy](economy.md), [groups](groups.md), [roster-management](roster-management.md), [tournaments](tournaments.md)
 
 ---
 
@@ -115,7 +115,7 @@ Derived stats are computed from primary attributes via multi-attribute blends. W
 | Vendor Modifier | Charisma |
 | Training Speed | Intellect |
 
-**Scaling Multipliers**: Each derived stat's weighted blend is multiplied by a **scaling multiplier** to produce game-scale values. For example, Health Pool = (0.60×Endurance + 0.25×Willpower + 0.15×Might) × 10. A character with 50 Endurance, 40 Willpower, and 100 Might has (30 + 10 + 15) × 10 = 550 HP. Starting multiplier for Health is ×10; all per-stat multipliers are tuning values deferred to the [combat](combat.md) spec.
+**Scaling Multipliers**: Each derived stat's weighted blend is multiplied by a **scaling multiplier** to produce game-scale values. For example, Health Pool = (0.60×Endurance + 0.25×Willpower + 0.15×Might) × 10. A character with 50 Endurance, 40 Willpower, and 100 Might has (30 + 10 + 15) × 10 = 550 HP. Starting multiplier for Health is ×10; all per-stat multipliers are tuning values deferred to the [combat](combat/index.md) spec.
 
 ### Resources
 
@@ -133,7 +133,7 @@ This spec defines universal resources only — pools every character has:
   - PvE encounters: full reset between fights.
 - Stamina regen rate and Defend recovery amount are tuning values deferred to the combat spec.
 
-Trait-unlocked resources (Mana, Faith, Spirit, Focus) are defined in the [traits-and-perks](traits-and-perks.md) spec via five Resource Families. Those resources are granted by owning Traits in the corresponding family and only exist on characters who possess those Traits.
+Trait-unlocked resources (Mana, Faith, Spirit, Focus) are defined in the [traits-and-perks](traits-and-perks/index.md) spec via five Resource Families. Those resources are granted by owning Traits in the corresponding family and only exist on characters who possess those Traits.
 
 ### Anatomical Slots
 
@@ -162,7 +162,7 @@ Physical body locations where equipment can be worn. Defined per-character based
 
 Every character has fixed inventory capacity, separate from Anatomical Slots:
 
-- **Equipment Slots**: 5 slots. Each equipped item occupies exactly 1 Equipment Slot regardless of how many Anatomical Slots it covers. Detailed mechanics in [equipment](equipment.md).
+- **Equipment Slots**: 5 slots. Each equipped item occupies exactly 1 Equipment Slot regardless of how many Anatomical Slots it covers. Detailed mechanics in [equipment](equipment/index.md).
 - **Consumable Slots**: 5 slots. Filled with consumables before battle. Separate from Equipment Slots. Detailed mechanics in [consumables](consumables.md).
 
 These counts are fixed and do not scale with Star Rating or any other property.
@@ -208,7 +208,7 @@ Dead → Recovering             (cheaper Raise Dead tier — returns with injuri
 - **Fallen**: When a character's HP drops below 1 during combat, they enter the Fallen sub-state and are out of the fight for its remainder. Post-combat fate depends on event type:
   - **Exhibition**: Fallen characters recover normally → Available (no injury risk).
   - **Non-exhibition (real fights)**: Fallen characters receive an injury/death roll **after combat resolves** (not at the moment of Fall). Outcomes: no injury → Available, injury sustained → Recovering, death → Dead.
-- Mid-combat revival of Fallen characters is possible via Perks, consumables, or rare equipment effects — see [combat](combat.md) for mechanics.
+- Mid-combat revival of Fallen characters is possible via Perks, consumables, or rare equipment effects — see [combat](combat/index.md) for mechanics.
 
 **Extensibility**: In-Combat may gain additional sub-states in later phases (e.g., Stunned, Fleeing) as combat complexity grows. These would be combat-internal states, not top-level character states.
 
@@ -237,7 +237,7 @@ The Character model (Attributes, derived stats, resources, Anatomical Slots) app
 - **Persistent characters** (player-owned and Named NPCs): Full Character entities with the state machine, identity fields, career tracking, and Trait slots. Tracked identically regardless of ownership.
 - **Ephemeral combatants** (unnamed battle enemies, e.g., "5× 1★ Bandits"): Use the same attribute and derived stat model for combat resolution but are not persistent entities — they are created for a specific combat encounter and cease to exist afterward. No state machine, no identity fields, no career tracking.
 
-Named NPC generation (via post-battle recruitment mechanics), the Free Agent pool, and Group membership effects are defined in downstream specs ([groups](groups.md), [roster-management](roster-management.md), [combat](combat.md)).
+Named NPC generation (via post-battle recruitment mechanics), the Free Agent pool, and Group membership effects are defined in downstream specs ([groups](groups.md), [roster-management](roster-management.md), [combat](combat/index.md)).
 
 ### Trait Generation at Recruitment
 
@@ -248,7 +248,7 @@ Characters arrive with pre-filled Traits determined by loot table rolls during g
 - **"Nothing" result**: After the first guaranteed roll per category, subsequent rolls can yield "nothing" — the slot remains empty for the player to fill later. A high-star character with many empty rolls is a rare open-potential find.
 - **Duplicate Trait roll**: If the same Trait is rolled again, it doesn't add a duplicate. Instead, a random Perk from that Trait's tree is unlocked (that isn't already unlocked). If all Perks are already unlocked, the roll is wasted.
 - **Recruiting Group Bond Trait**: When recruited from a specific Group, that Group's Bond Trait is always guaranteed as one of the Bond rolls. Remaining Bond rolls (if any) draw from the wider loot table.
-- **Loot table source**: The archetype's "likely trait pool" defines the weighted loot table for each category. See [traits-and-perks](traits-and-perks.md) for Trait pool definitions.
+- **Loot table source**: The archetype's "likely trait pool" defines the weighted loot table for each category. See [traits-and-perks](traits-and-perks/index.md) for Trait pool definitions.
 
 ### XP Ownership
 
@@ -429,7 +429,7 @@ XP is earned and stored **per-character**. Each character banks their own XP fro
 
 - **Decision**: Two tiers of combatant entity. Persistent characters (player-owned and Named NPCs) are full Character entities with state machine, identity, career tracking, and Trait slots. Ephemeral combatants (unnamed battle enemies) use the same attribute/derived stat model but are not persistent — created for a specific combat and discarded afterward.
 - **Rationale**: All combat math should be uniform regardless of combatant origin. Persistence is only needed for entities the game tracks across time. Unnamed enemies don't need state machines or career histories.
-- **Implications**: Combat spec handles ephemeral combatant lifecycle (creation and teardown). Named NPC generation via post-battle recruitment (Charisma/Luck/Awareness check) and the Free Agent pool are defined in downstream specs ([combat](combat.md), [groups](groups.md), [roster-management](roster-management.md)).
+- **Implications**: Combat spec handles ephemeral combatant lifecycle (creation and teardown). Named NPC generation via post-battle recruitment (Charisma/Luck/Awareness check) and the Free Agent pool are defined in downstream specs ([combat](combat/index.md), [groups](groups.md), [roster-management](roster-management.md)).
 
 ### Inventory Slot Counts
 
@@ -455,14 +455,14 @@ XP is earned and stored **per-character**. Each character banks their own XP fro
 
 All character-domain design questions are resolved. The following tuning values are deferred to other specs:
 
-- **Stamina regen rate and Defend recovery amount** → deferred to [combat](combat.md) spec
+- **Stamina regen rate and Defend recovery amount** → deferred to [combat](combat/index.md) spec
 - **Championship partial reset percentages** → deferred to [tournaments](tournaments.md) spec
 - **Promotion metacurrency cost** → deferred to [economy](economy.md) spec
-- **Recovery tick duration** → deferred to [roster-management](roster-management.md) or [combat](combat.md) spec
+- **Recovery tick duration** → deferred to [roster-management](roster-management.md) or [combat](combat/index.md) spec
 - **Activity restrictions while Recovering** → deferred to [roster-management](roster-management.md) spec
 - **Training Speed formula** → deferred to [economy](economy.md) spec
-- **Per-stat derived stat scaling multipliers** → deferred to [combat](combat.md) spec
-- **Fallen revival rules (mid-combat)** → resolved in [combat](combat.md) spec (Perks, consumables, rare equipment)
+- **Per-stat derived stat scaling multipliers** → deferred to [combat](combat/index.md) spec
+- **Fallen revival rules (mid-combat)** → resolved in [combat](combat/index.md) spec (Perks, consumables, rare equipment)
 - **Injury/death roll mechanics and tables** → deferred to [post-combat](post-combat.md) spec
 
 ---
@@ -471,10 +471,10 @@ All character-domain design questions are resolved. The following tuning values 
 
 | Spec | Implication |
 |------|-------------|
-| [traits-and-perks](traits-and-perks.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. Trait generation loot table weights per archetype (weighted pool for Core/Role/Bond rolls at character generation). |
-| [combat](combat.md) | 16 derived stat formulas with locked weight ratios (including Judgment for AI quality). Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain at 1:1 ratio). Percentage-based Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival via Perks/consumables — resolved). Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). |
+| [traits-and-perks](traits-and-perks/index.md) | Now 9 attributes for Stat Adjustments to reference. Species = Core Traits pattern (no hardcoded species list). Trait-unlocked resources (Mana, Focus, etc.) defined there. Group archetype system defines likely trait pools per recruitment source. Bond Traits map to Groups. Trait generation loot table weights per archetype (weighted pool for Core/Role/Bond rolls at character generation). |
+| [combat](combat/index.md) | 16 derived stat formulas with locked weight ratios (including Judgment for AI quality). Per-stat scaling multipliers (Health starts ×10, others TBD). Stamina exhaustion mechanic (0 Stamina → Health drain at 1:1 ratio). Percentage-based Stamina regen per tick + Defend recovery burst. Magic Defense stat. Luck affects crit chance and resistance rolls. Fallen sub-state mechanics (HP < 1 → out of fight; mid-combat revival via Perks/consumables — resolved). Ephemeral combatant lifecycle (creation/teardown for unnamed enemies). |
 | [post-combat](post-combat.md) | Injury/death roll mechanics for non-exhibition Fallen characters. Perk Discovery resolution (per-Trait end-of-combat roll, accept/reject). Post-battle recruitment check (Charisma/Luck/Awareness → generate Named NPC). Loot distribution. |
-| [equipment](equipment.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
+| [equipment](equipment/index.md) | Equipment requirements reference 9 attributes (especially Might for heavy gear). Bonus Modifier system: equipment bonuses are a tracked layer separate from base Current. |
 | [economy](economy.md) | Star generation involves Group tiers + gold + metacurrency. Promotion = metacurrency only (very expensive). Training cost = Current value per +1. Career milestones affect retirement value. Raise Dead tier pricing (three tiers with decreasing penalties). Training Speed formula definition. XP earn rates per fight (per-character XP). Character hiring cost should factor starting Trait count. |
 | [groups](groups.md) | Group-specific recruitment archetypes. Each Group that offers recruitment defines its archetype set. Vendor pricing uses Charisma-based Vendor Modifier. Group NPC membership effects (vendor inventories, loot table generation, trainer availability). Free Agent pool (persistent Named NPCs not attached to any Group, recruitable by players). Each recruiting Group must have a Bond Trait (guaranteed at generation). |
 | [roster-management](roster-management.md) | Promotion gives +1★ and +10% all Potentials. Potential reduction from injuries. Career milestone tracking. Retirement for metacurrency. Define activity restrictions during Recovering state (training, Group interactions). Define recovery tick durations (passive healing rate). Character dismissal/firing mechanics. Free Agent recruitment flow. Post-battle recruitment flow (accepting/declining generated Named NPCs). |

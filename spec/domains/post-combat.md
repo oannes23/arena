@@ -3,7 +3,7 @@
 **Status**: 🟢 Complete (8 interrogation rounds, 18 decisions)
 **Last interrogated**: 2026-02-18
 **Last verified**: —
-**Depends on**: [combat](combat.md), [characters](characters.md), [traits-and-perks](traits-and-perks.md)
+**Depends on**: [combat](combat/index.md), [characters](characters.md), [traits-and-perks](traits-and-perks/index.md)
 **Depended on by**: [tournaments](tournaments.md), [roster-management](roster-management.md), [economy](economy.md)
 
 ---
@@ -12,7 +12,7 @@
 
 Post-combat is the resolution phase after a fight concludes. When combat declares victory or defeat (last team standing, or mutual elimination draw), the post-combat system takes over to resolve consequences: injuries, Perk discovery, recruitment opportunities, and loot distribution. This phase is presented as a sequential dramatic narrative, not a bulk summary.
 
-**All teams** go through post-combat, not just the winner. The difference is in what each team receives (reward scaling by placement). Post-combat receives data from the combat system: the [Combat Scoreboard](combat.md#combat-scoreboard), Fallen characters with overkill values, active Traits list, and [Combat Context Flags](combat.md#combat-context-flags).
+**All teams** go through post-combat, not just the winner. The difference is in what each team receives (reward scaling by placement). Post-combat receives data from the combat system: the [Combat Scoreboard](combat/systems.md#combat-scoreboard), Fallen characters with overkill values, active Traits list, and [Combat Context Flags](combat/systems.md#combat-context-flags).
 
 ---
 
@@ -137,7 +137,7 @@ Perk Discovery uses a **single end-of-combat check per qualifying Trait**, not p
 - **Reject**: Perk is not acquired. It remains in the discovery pool for future rolls. No penalty for rejection.
 - Multiple discoveries can occur from a single combat (from different Traits). Each is presented individually.
 
-See [traits-and-perks](traits-and-perks.md) for the Perk Discovery system design and modifier sources.
+See [traits-and-perks](traits-and-perks/index.md) for the Perk Discovery system design and modifier sources.
 
 ### XP Distribution
 
@@ -174,7 +174,7 @@ Recruitment generates **new Named NPCs** from the event's archetype pool — you
 
 The final phase distributes material rewards from combat.
 
-**Scope**: Loot distribution formulas (gold amounts, equipment drop rates, loot tables) are fully defined in [economy](economy.md) and [equipment](equipment.md). This spec defines only that:
+**Scope**: Loot distribution formulas (gold amounts, equipment drop rates, loot tables) are fully defined in [economy](economy.md) and [equipment](equipment/index.md). This spec defines only that:
 - Loot phase fires after recruitment
 - Rewards are scaled by placement (1st = 100%, 2nd = 60%, etc.)
 - Reward types include: gold, equipment drops, consumables, materials, metacurrency (tournaments)
@@ -329,7 +329,7 @@ Most structural questions are resolved. Remaining items are tuning values:
 10. **Injury Resistance scaling multiplier**: What multiplier for the Injury Resistance derived stat produces desired injury rates at target attribute levels?
 
 ### Deferred to Other Specs
-- **Gold amounts, loot tables, equipment drop rates**: [economy](economy.md) and [equipment](equipment.md)
+- **Gold amounts, loot tables, equipment drop rates**: [economy](economy.md) and [equipment](equipment/index.md)
 - **Recruitment hiring costs**: [economy](economy.md)
 - **Healing service costs and availability**: [groups](groups.md) and [economy](economy.md)
 - **Crowd Appeal tournament effects**: [tournaments](tournaments.md)
@@ -341,13 +341,13 @@ Most structural questions are resolved. Remaining items are tuning values:
 
 | Spec | Implication |
 |------|-------------|
-| [combat](combat.md) | Provides Combat Scoreboard, Fallen list with overkill, active Traits list, Context Flags at combat end. Combat.md ends at victory/defeat — post-combat handles everything after. Overkill = final fall only (revived characters' previous falls don't accumulate). |
+| [combat](combat/index.md) | Provides Combat Scoreboard, Fallen list with overkill, active Traits list, Context Flags at combat end. Combat.md ends at victory/defeat — post-combat handles everything after. Overkill = final fall only (revived characters' previous falls don't accumulate). |
 | [characters](characters.md) | **NEW derived stat: Injury Resistance** (50% Endurance + 30% Luck + 20% Willpower). Injury outcomes drive state transitions: Available (no injury), Recovering (minor/major/critical), Dead (death). Recovering characters fight with penalties. Recovery times in game ticks. |
-| [traits-and-perks](traits-and-perks.md) | Perk Discovery model: per-Trait end-of-combat roll. Active Traits only. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier`. Resolution: accept/reject per discovery. **Death prevention Perks**: rare Perks that cap worst injury outcome at critical. **Injury Resistance Perks**: flat bonuses to the new derived stat. |
+| [traits-and-perks](traits-and-perks/index.md) | Perk Discovery model: per-Trait end-of-combat roll. Active Traits only. Formula: `(Base Rate + Luck Bonus + Perk Bonuses) × Trait Level Multiplier`. Resolution: accept/reject per discovery. **Death prevention Perks**: rare Perks that cap worst injury outcome at critical. **Injury Resistance Perks**: flat bonuses to the new derived stat. |
 | [tournaments](tournaments.md) | Full post-combat fires per tournament round. Injuries apply immediately (persist across rounds, no recovery between rounds). Discoveries usable next round. No recruitment in tournaments. Crowd Appeal mechanics are tournament-specific. Must account for compounding injuries across rounds. |
 | [economy](economy.md) | Post-combat is a primary source of gold, XP, and loot. XP pool per event type needed. Recruitment hiring costs. Healing service costs for injury recovery acceleration. Gold costs for vendor training fights. Placement-proportional reward scaling. |
 | [roster-management](roster-management.md) | Injury outcomes feed into roster availability and recovery. Declined recruitment candidates become Free Agents — a primary Free Agent generation source. Recruitment phase produces new roster candidates at event-defined Star Ratings. |
-| [equipment](equipment.md) | Loot phase distributes equipment drops. Drop tables and quality scaling defined jointly with equipment spec. Placement-proportional scaling applies to drop rates. |
+| [equipment](equipment/index.md) | Loot phase distributes equipment drops. Drop tables and quality scaling defined jointly with equipment spec. Placement-proportional scaling applies to drop rates. |
 | [groups](groups.md) | Healing services from Groups can accelerate or instant-cure injuries. Vendor training fights use per-event post-combat configuration (XP + discovery, no injury, gold cost). Event archetype pools reference Group-specific archetypes. |
 | [meta-balance](../architecture/meta-balance.md) | Combat Scoreboard data (passed through from combat) feeds win/loss tracking per Trait. |
 | [data-model](../architecture/data-model.md) | Must support: tiered injury roll data (diminishing returns formula with Injury Resistance), named injury type catalog (tier, effects, recovery time — content data), post-combat profile schema (per-event-type configuration with defaults + overrides), discovery roll results, recruitment candidate data (archetype, Star Rating range), per-team placement and reward scaling, Injury Resistance as derived stat. |

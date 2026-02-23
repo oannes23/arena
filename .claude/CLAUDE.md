@@ -20,9 +20,17 @@ A procedurally generated gladiatorial house management game — a roguelike idle
 arena/
 ├── spec/                    # Agent-centric specifications (structured for LLM consumption)
 │   ├── MASTER.md            # Central index and status tracker
+│   ├── CHANGELOG.md         # Detailed change history (extracted from MASTER.md)
 │   ├── glossary.md          # Canonical term definitions
 │   ├── architecture/        # System-level design docs
 │   ├── domains/             # Feature area specifications
+│   │   ├── combat/          # Split into: index, foundation, resolution, systems, vocabularies, decisions, open-questions
+│   │   ├── equipment/       # Split into: index, slots-and-implements, types-and-tags, armor, quality-and-affixes, inventory-and-loot, decisions, open-questions
+│   │   ├── traits-and-perks/ # Split into: index, core, generation, mechanics, decisions, open-questions
+│   │   ├── characters.md    # Single-file specs (convert to directory when >500 lines)
+│   │   ├── post-combat.md
+│   │   ├── combat-ai.md
+│   │   └── ...              # Other single-file domain specs
 │   └── implementation/      # Epic and Story specs for building
 ├── docs/                    # Human-readable documentation
 ├── .claude/

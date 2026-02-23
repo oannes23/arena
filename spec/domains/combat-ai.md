@@ -3,7 +3,7 @@
 **Status**: 🟢 Complete (Round 2: 14 additional decisions)
 **Last interrogated**: 2026-02-17
 **Last verified**: —
-**Depends on**: [combat](combat.md), [traits-and-perks](traits-and-perks.md), [characters](characters.md)
+**Depends on**: [combat](combat/index.md), [traits-and-perks](traits-and-perks/index.md), [characters](characters.md)
 **Depended on by**: [tournaments](tournaments.md)
 
 ---
@@ -31,7 +31,7 @@ This replaces the priority-list model (try A, then B, then C) which does not sca
 
 ### Judgment — Derived Stat
 
-Judgment is a derived combat stat that controls AI decision quality. See [combat.md](combat.md) for the canonical formula.
+Judgment is a derived combat stat that controls AI decision quality. See [combat.md](combat/index.md) for the canonical formula.
 
 **Function** — controls three parameters:
 
@@ -94,7 +94,7 @@ Reusable Consideration types that Perk Actions reference by name. Content author
 
 | Scorer | Track | Evaluates |
 |--------|-------|-----------|
-| `resource_efficiency` | Tactical | Cost relative to remaining pool, fight phase via [fight phase signal](combat.md#fight-phase-signal) (early = conserve, late = spend), and regen rate. For multi-resource costs, evaluates each pool independently and takes the **minimum** score (bottleneck pool dominates). |
+| `resource_efficiency` | Tactical | Cost relative to remaining pool, fight phase via [fight phase signal](combat/systems.md#fight-phase-signal) (early = conserve, late = spend), and regen rate. For multi-resource costs, evaluates each pool independently and takes the **minimum** score (bottleneck pool dominates). |
 | `damage_output` | Tactical | Estimated damage vs target defenses (Soak, Defense Value, damage type resistances). Higher when the Action deals more effective damage. |
 | `healing_urgency` | Tactical | How badly do allies (or self) need healing? Scales with missing HP across valid heal targets. Near-zero when all allies are healthy. |
 | `aoe_clustering` | Tactical | Net value of targets in AoE zone. Σ(enemy value) − Σ(ally penalty × 1.5–2.0× weight). Negative-net zones score ~0.05 (naturally deprioritized but not vetoed). |
@@ -386,14 +386,14 @@ Player-configured **consumable triggers** (Phase 2+) map to Gate overrides on co
 
 At fight start, the combat system passes an explicit **context flags** object to the AI system. Any Scorer can query these flags to adjust behavior based on fight circumstances.
 
-The canonical context flags schema is defined in [combat.md](combat.md#combat-context-flags). Key fields include: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_size`, `opponent_team_size`, `attrition_ramp_onset`, `attrition_ramp_rate`. The schema is extensible.
+The canonical context flags schema is defined in [combat.md](combat/systems.md#combat-context-flags). Key fields include: `is_tournament`, `round`, `total_rounds`, `consumables_replenish`, `is_exhibition`, `pve_tier`, `team_size`, `opponent_team_size`, `attrition_ramp_onset`, `attrition_ramp_rate`. The schema is extensible.
 
 **Usage examples**:
 - `consumable_scarcity` checks `is_tournament`, `round`, `total_rounds`, and `consumables_replenish` to decide conservation strategy
 - `resource_efficiency` uses the **fight phase signal** (`current_tick / attrition_ramp_onset`) for fight phase detection: conserve resources early (< 0.5), balanced mid-fight (0.5–0.8), spend freely late (> 0.8). The `attrition_ramp_onset` from Context Flags serves as `estimated_max_ticks`.
 - Future Scorers can use `pve_tier` to adjust risk tolerance (low-tier PvE = more aggressive, high-tier = more conservative)
 
-Context flags are defined by the combat system (see [combat.md](combat.md#combat-context-flags)), not by the AI spec. The AI spec only defines that Scorers can read them.
+Context flags are defined by the combat system (see [combat.md](combat/systems.md#combat-context-flags)), not by the AI spec. The AI spec only defines that Scorers can read them.
 
 ---
 
@@ -440,7 +440,7 @@ For characters with 1-tick lookahead, this Scorer provides minimal information (
 Team AI uses **sequential evaluation with state updates**. Characters within a tick's Turns Phase evaluate and act in **Initiative order** (highest Initiative first), and the board state updates after each character acts. There is no explicit coordination logic — natural coordination emerges from characters reacting to current reality.
 
 **How it works**:
-1. Characters are ordered by Initiative (using the standard tie-breaking rules from [combat.md](combat.md))
+1. Characters are ordered by Initiative (using the standard tie-breaking rules from [combat.md](combat/index.md))
 2. The first character evaluates all Actions against current board state, selects and executes one
 3. Board state updates (HP changes, status applied, position changed, etc.)
 4. The next character evaluates against the **updated** board state
@@ -529,7 +529,7 @@ The combat log replaces simulation needs — players learn their character's ten
 
 - **Decision**: AI Considerations are defined as part of each Perk Action's data model, not in a separate configuration layer.
 - **Rationale**: Keeps AI behavior co-located with ability definitions. Content authors designing a new Perk Action define its AI behavior at the same time, ensuring consistency. No separate "AI configuration database" to maintain. The standard Consideration library handles most cases; content authors compose from reusable types.
-- **Implications**: Perk Action data model in [traits-and-perks](traits-and-perks.md) must include an `ai` block. Data model spec must support the Consideration schema (type + parameters).
+- **Implications**: Perk Action data model in [traits-and-perks](traits-and-perks/index.md) must include an `ai` block. Data model spec must support the Consideration schema (type + parameters).
 
 ### Player Config as Weight Overrides
 
@@ -569,7 +569,7 @@ All design questions are resolved. Remaining items are tuning values:
 5. **Personality archetype weights**: Default influence strength per archetype. How strongly does "Aggressive" bias toward offensive Actions?
 6. **Anti-repetition penalty**: Exact multiplier (~0.85× is the starting point). May vary by Action type (spamming the same AoE might be worse than repeating a basic Attack).
 7. **AoE ally penalty weight**: Exact multiplier (1.5–2.0× range) for ally presence in AoE zones.
-8. **Fight phase detection**: `resource_efficiency` uses the fight phase signal (`current_tick / attrition_ramp_onset`) from [combat.md](combat.md#fight-phase-signal). Remaining tuning: exact threshold breakpoints for conservation strategy shifts (conserve < 0.5, balanced 0.5–0.8, spend > 0.8 are starting points).
+8. **Fight phase detection**: `resource_efficiency` uses the fight phase signal (`current_tick / attrition_ramp_onset`) from [combat.md](combat/systems.md#fight-phase-signal). Remaining tuning: exact threshold breakpoints for conservation strategy shifts (conserve < 0.5, balanced 0.5–0.8, spend > 0.8 are starting points).
 9. **Consumable scarcity thresholds**: Exact scoring curves for the `consumable_scarcity` Scorer — how remaining uses, impact assessment, and tournament round factor into the penalty.
 10. **Stealth awareness parameters**: Scoring weights for `stealth_awareness` — how much does AoE get boosted vs. single-target deprioritized when stealth enemies exist? At what threshold does Search become worthwhile?
 11. **Zone density weights**: How strongly does zone density (ally/enemy count per zone) factor into `position_need` relative to range-gap evaluation?
@@ -581,12 +581,12 @@ All design questions are resolved. Remaining items are tuning values:
 
 | Spec | Implication |
 |------|-------------|
-| [combat](combat.md) | Judgment is a new derived stat (Awareness + Willpower + Intellect blend). Combat log must record AI scoring data (top 3 Actions per turn with scores). AI evaluation happens during the Turns Phase of each tick. Characters within a tick act sequentially in Initiative order with state updates between each. Combat system passes context flags to AI at fight start. **Fight length revised to 25–150 ticks** (range reflects PvE fodder to championship finals). |
-| [traits-and-perks](traits-and-perks.md) | Perk Action data model must include an `ai` block (gates, tactical_scorers, personality_scorers). Core Traits may include personality archetype tags. Default Actions (Combatant system Trait) have embedded Considerations. |
+| [combat](combat/index.md) | Judgment is a new derived stat (Awareness + Willpower + Intellect blend). Combat log must record AI scoring data (top 3 Actions per turn with scores). AI evaluation happens during the Turns Phase of each tick. Characters within a tick act sequentially in Initiative order with state updates between each. Combat system passes context flags to AI at fight start. **Fight length revised to 25–150 ticks** (range reflects PvE fodder to championship finals). |
+| [traits-and-perks](traits-and-perks/index.md) | Perk Action data model must include an `ai` block (gates, tactical_scorers, personality_scorers). Core Traits may include personality archetype tags. Default Actions (Combatant system Trait) have embedded Considerations. |
 | [characters](characters.md) | Judgment is a new derived stat feeding the AI system. Awareness, Willpower, and Intellect gain additional importance as contributors to AI quality. |
 | [consumables](consumables.md) | Consumable Actions need AI Considerations and use the standard Gate/Scorer pipeline. `consumable_scarcity` Scorer manages limited-use conservation. Player-configured consumable triggers map to Gate overrides (e.g., "use healing potion below 30% HP" adds a custom Gate). Tournament context flags affect consumable conservation strategy. |
 | [tournaments](tournaments.md) | NPC teams use the same AI system — difficulty comes from stat distribution, not AI code. AI configuration quality affects tournament performance (Phase 2+). |
-| [equipment](equipment.md) | Equipment affixes can modify Judgment (boosting or reducing AI quality). Equipment with AI-relevant effects (stealth, AoE, revival) benefits from appropriate Considerations. |
+| [equipment](equipment/index.md) | Equipment affixes can modify Judgment (boosting or reducing AI quality). Equipment with AI-relevant effects (stealth, AoE, revival) benefits from appropriate Considerations. |
 | [data-model](../architecture/data-model.md) | Must support: Consideration schema (type + curve parameters), per-Action AI block (gates + tactical_scorers + personality_scorers), per-character AI configuration (weight overrides), personality archetype tags on Core Traits. |
 
 ---

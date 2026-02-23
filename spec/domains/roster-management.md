@@ -3,7 +3,7 @@
 **Status**: 🟡 In progress
 **Last interrogated**: —
 **Last verified**: —
-**Depends on**: [characters](characters.md), [economy](economy.md), [traits-and-perks](traits-and-perks.md)
+**Depends on**: [characters](characters.md), [economy](economy.md), [traits-and-perks](traits-and-perks/index.md)
 **Depended on by**: [tournaments](tournaments.md)
 
 ---
@@ -144,9 +144,9 @@ Roster Management covers everything that happens to characters outside of combat
 |------|-------------|
 | [characters](characters.md) | Character generation rules define what vendors produce. Injury modifies Attributes and anatomical slots. |
 | [economy](economy.md) | Hiring, upkeep, healing, resurrection, and retirement are major gold sinks. Metacurrency is a separate economy. |
-| [traits-and-perks](traits-and-perks.md) | Vendor-generated characters come with pre-built Traits. Respec is an expensive vendor service. |
+| [traits-and-perks](traits-and-perks/index.md) | Vendor-generated characters come with pre-built Traits. Respec is an expensive vendor service. |
 | [tournaments](tournaments.md) | Injured/dead characters may be unavailable for tournaments. Roster depth determines tournament participation capacity. |
-| [combat](combat.md) | Injury outcomes depend on combat defeat conditions. Character availability for future fights depends on injury/death status. |
+| [combat](combat/index.md) | Injury outcomes depend on combat defeat conditions. Character availability for future fights depends on injury/death status. |
 
 ---
 

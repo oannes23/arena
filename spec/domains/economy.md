@@ -155,8 +155,8 @@ On-demand combat available between ticks for grinding:
 | Spec | Implication |
 |------|-------------|
 | [characters](characters.md) | Character value (star rating, attributes, traits) determines hiring cost and upkeep. |
-| [traits-and-perks](traits-and-perks.md) | Training costs (XP for Perks/Attributes) are a major XP sink. Support Role Traits provide economic bonuses. |
-| [equipment](equipment.md) | Repair, forging, affix manipulation, and market transactions are primary gold sinks. |
+| [traits-and-perks](traits-and-perks/index.md) | Training costs (XP for Perks/Attributes) are a major XP sink. Support Role Traits provide economic bonuses. |
+| [equipment](equipment/index.md) | Repair, forging, affix manipulation, and market transactions are primary gold sinks. |
 | [consumables](consumables.md) | Crafting costs, vendor purchases, and recipe acquisition are ongoing gold sinks. |
 | [roster-management](roster-management.md) | Hiring costs, upkeep, healing, and resurrection are major gold sinks. Bankruptcy triggers roster changes. |
 | [tournaments](tournaments.md) | Tournament rewards are a primary income source. Reward scaling must balance against costs. |

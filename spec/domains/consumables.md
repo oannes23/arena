@@ -3,7 +3,7 @@
 **Status**: 🟡 In progress
 **Last interrogated**: —
 **Last verified**: —
-**Depends on**: [traits-and-perks](traits-and-perks.md)
+**Depends on**: [traits-and-perks](traits-and-perks/index.md)
 **Depended on by**: [economy](economy.md)
 
 ---
@@ -96,10 +96,10 @@ Consumables have small baseline impact UNLESS a build specializes:
 
 | Spec | Implication |
 |------|-------------|
-| [traits-and-perks](traits-and-perks.md) | Specialist Perks (Bomber, Apothecary, Scribe) amplify consumable power. Scribe creates scrolls from known Perks. |
-| [combat](combat.md) | Consumables are combat actions with Initiative costs. Status effects from bombs/scrolls use the stack-based system. |
+| [traits-and-perks](traits-and-perks/index.md) | Specialist Perks (Bomber, Apothecary, Scribe) amplify consumable power. Scribe creates scrolls from known Perks. |
+| [combat](combat/index.md) | Consumables are combat actions with Initiative costs. Status effects from bombs/scrolls use the stack-based system. |
 | [combat-ai](combat-ai.md) | AI needs trigger conditions for consumable usage (HP thresholds, turn count, etc.). |
-| [equipment](equipment.md) | Shared Tag vocabulary enables cross-system Perk synergies. |
+| [equipment](equipment/index.md) | Shared Tag vocabulary enables cross-system Perk synergies. |
 | [economy](economy.md) | Consumable crafting, purchasing, and usage are gold sinks. Alchemist/Scribe support staff affect production costs. |
 
 ---

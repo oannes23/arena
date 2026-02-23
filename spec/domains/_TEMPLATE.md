@@ -56,4 +56,19 @@
 
 ---
 
+## Converting to a Directory
+
+When a single-file spec grows beyond ~500 lines of content, convert it to a directory:
+
+1. Create `spec/domains/<name>/` directory
+2. Create `index.md` with metadata, overview, and Table of Contents
+3. Split content into topical files (named by concept, not numbered)
+4. Always extract `decisions.md` and `open-questions.md` as separate files
+5. Update all cross-references in other specs (`<name>.md` → `<name>/index.md`)
+6. For deep anchor links, route to the specific sub-file (`<name>/sub-file.md#anchor`)
+7. Delete the original single file
+8. Update MASTER.md domain table link
+
+---
+
 _Last updated: 2026-02-10_
